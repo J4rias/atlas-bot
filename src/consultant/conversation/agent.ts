@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient, MODEL_SONNET } from '../../shared/ai/client.js';
 import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.js';
+import { quotePriceToolDef, executeQuotePrice } from '../tools/index.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ConversationState } from './manager.js';
@@ -12,6 +13,12 @@ const log = createLogger('consultant').child({ module: 'agent' });
 
 // Max tool-use iterations to prevent infinite loops
 const MAX_TOOL_ROUNDS = 5;
+
+// All tools available to the Consultant
+const consultantTools: Anthropic.Tool[] = [
+  ...erpToolDefinitions,
+  quotePriceToolDef,
+];
 
 /**
  * Process a user message through Claude and return the text response.
@@ -34,7 +41,7 @@ export async function getAgentResponse(
       model: MODEL_SONNET,
       max_tokens: 1024,
       system: systemPrompt,
-      tools: erpToolDefinitions,
+      tools: consultantTools,
       messages,
     });
 
@@ -56,7 +63,9 @@ export async function getAgentResponse(
       for (const toolUse of toolUseBlocks) {
         log.debug({ tool: toolUse.name, input: toolUse.input }, 'Tool call');
         try {
-          const result = await executeErpTool(toolUse.name, toolUse.input);
+          const result = toolUse.name === 'quote_price'
+            ? await executeQuotePrice(toolUse.input as unknown as Parameters<typeof executeQuotePrice>[0])
+            : await executeErpTool(toolUse.name, toolUse.input);
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolUse.id,
