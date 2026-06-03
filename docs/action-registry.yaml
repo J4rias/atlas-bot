@@ -1,0 +1,99 @@
+agent: manager
+version: "1.0"
+
+capabilities:
+  read:
+    - id: read_sales_data
+      description: "Consultar datos de ventas del ERP (productos vendidos, montos, fechas)"
+      erp_endpoints:
+        - "GET /api/sales"
+        - "GET /api/sales/summary"
+        - "GET /api/sales/top-products"
+        - "GET /api/sales/by-currency"
+        - "GET /api/sales/by-customer"
+
+    - id: read_inventory
+      description: "Consultar niveles de inventario por bodega"
+      erp_endpoints:
+        - "GET /api/inventory/warehouse/:id"
+
+    - id: read_exchange_rates
+      description: "Consultar tasas de cambio actuales (Tasa Atlas)"
+      erp_endpoints:
+        - "GET /api/exchange-rates/latest"
+        - "GET /api/dashboard/rate-history"
+
+    - id: read_customer_data
+      description: "Consultar datos de clientes activos y estado de crédito"
+      erp_endpoints:
+        - "GET /api/customers/active"
+        - "GET /api/customers/:id/credit-summary"
+
+    - id: read_preorders
+      description: "Consultar pre-órdenes pendientes"
+      erp_endpoints:
+        - "GET /api/pre-orders?status=pending"
+
+    - id: read_kpis
+      description: "Consultar KPIs en tiempo real (ventas, márgenes, conversión)"
+      erp_endpoints:
+        - "GET /api/dashboard/kpis"
+        - "GET /api/dashboard/inventory-health"
+
+  analyze:
+    - id: sales_trend_analysis
+      description: "Analizar tendencias de ventas (diarias, semanales, mensuales)"
+
+    - id: inventory_health_check
+      description: "Evaluar salud del inventario: productos bajo stock, sobre stock, sin rotación"
+
+    - id: rate_impact_analysis
+      description: "Analizar impacto de cambios en tasas de cambio sobre márgenes"
+
+    - id: customer_segmentation
+      description: "Analizar patrones de compra y segmentar clientes"
+
+    - id: preorder_pipeline
+      description: "Analizar pipeline de pre-órdenes: pendientes, aprobadas, rechazadas, tiempos"
+
+  notify:
+    - id: send_diagnostic_report
+      description: "Enviar reporte diagnóstico a los jefes vía Telegram (grupo)"
+
+    - id: send_alert
+      description: "Enviar alerta urgente (stock bajo, tasa anómala, etc.)"
+
+    - id: escalate_to_bosses
+      description: "Escalar decisión de negocio a jefes con opciones (Aprobar/Rechazar/Modificar)"
+
+    - id: escalate_to_tech
+      description: "Reportar limitación técnica o error al programador vía mensaje privado"
+
+  memory:
+    - id: read_own_memory
+      description: "Consultar memorias propias para contexto"
+
+    - id: write_memory
+      description: "Guardar nueva observación, insight o decisión"
+
+    - id: record_outcome
+      description: "Registrar resultado de una sugerencia previa (aceptada, rechazada, resultado real)"
+
+  restrictions:
+    - id: no_write_erp
+      description: "NO puede modificar datos en el ERP (no crear ventas, no ajustar inventario, no modificar precios)"
+
+    - id: no_approve_preorders
+      description: "NO puede aprobar o rechazar pre-órdenes"
+
+    - id: no_modify_rates
+      description: "NO puede modificar tasas de cambio"
+
+    - id: no_customer_contact
+      description: "NO puede contactar clientes directamente"
+
+    - id: suggest_only
+      description: "Solo SUGIERE acciones — nunca ejecuta cambios en sistemas externos"
+
+    - id: no_fabricate
+      description: "NUNCA fabricar datos. Si no tiene información suficiente, debe escalar"

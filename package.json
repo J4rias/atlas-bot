@@ -1,0 +1,36 @@
+{
+  "name": "atlas-bot",
+  "version": "0.2.0",
+  "description": "AI sales middleware for Inversiones Atlas — Consultant + Manager",
+  "type": "module",
+  "scripts": {
+    "dev:consultant": "tsx watch src/consultant/main.ts",
+    "dev:manager": "tsx watch src/manager/main.ts",
+    "dev": "concurrently -n consul,manager -c blue,green \"pnpm dev:consultant\" \"pnpm dev:manager\"",
+    "build": "tsc",
+    "start:consultant": "node dist/consultant/main.js",
+    "start:manager": "node dist/manager/main.js",
+    "db:migrate": "tsx src/shared/db/migrate.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "grammy": "^1.35.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.1",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/ejs": "^3.1.5",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.10",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

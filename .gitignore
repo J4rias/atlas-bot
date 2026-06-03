@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker volumes
+pgdata/
+
+# Claude Code
+.claude/
+
+# pnpm
+pnpm-workspace.yaml
+
+# Coverage / testing
+coverage/
+.nyc_output/
+
+# Temp files
+tmp/
+temp/
+*.tmp

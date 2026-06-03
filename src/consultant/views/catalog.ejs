@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catalogo - Inversiones Atlas</title>
+  <link rel="stylesheet" href="/css/catalog.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1>Inversiones Atlas</h1>
+    <p>Catalogo de Productos</p>
+  </div>
+</header>
+
+<nav class="categories">
+  <a href="/catalogo" class="chip <%= !selectedCategory ? 'active' : '' %>">Todos</a>
+  <% categories.forEach(function(cat) { %>
+    <a
+      href="/catalogo?categoria=<%= cat.id %>"
+      class="chip <%= selectedCategory == cat.id ? 'active' : '' %>"
+      style="--cat-color: <%= cat.color || '#059669' %>"
+    >
+      <%= cat.name %>
+      <span class="chip-count"><%= cat.productCount %></span>
+    </a>
+  <% }) %>
+</nav>
+
+<main class="main">
+  <% if (groups.length === 0) { %>
+    <div class="empty">
+      <p>No se encontraron productos.</p>
+    </div>
+  <% } %>
+
+  <% groups.forEach(function(group) { %>
+    <section class="category-section">
+      <h2 class="category-title" style="border-color: <%= group.category.color || '#059669' %>">
+        <%= group.category.name %>
+      </h2>
+
+      <div class="product-grid">
+        <% group.products.forEach(function(product) { %>
+          <div class="product-card">
+            <div class="card-img">
+              <% if (product.image_url) { %>
+                <img src="<%= product.image_url %>" alt="<%= product.name %>" loading="lazy">
+              <% } else { %>
+                <div class="img-placeholder"></div>
+              <% } %>
+              <% if (product.stock <= 0) { %>
+                <span class="badge badge-out">Agotado</span>
+              <% } %>
+            </div>
+
+            <div class="card-body">
+              <h3 class="card-title"><%= product.name %></h3>
+              <% if (product.brand) { %>
+                <span class="card-brand"><%= product.brand.name %></span>
+              <% } %>
+
+              <div class="presentations">
+                <% product.presentations.forEach(function(pres) {
+                  var priceInfo = priceMap.get(pres.id);
+                  var pkgPrice = priceInfo ? priceInfo.packagePrice : 0;
+                  var unitPrice = priceInfo ? priceInfo.unitPrice : 0;
+                %>
+                  <div class="pres-row">
+                    <span class="pres-name"><%= pres.name %></span>
+                    <% if (pkgPrice > 0) { %>
+                      <span class="pres-price">$<%= pkgPrice.toFixed(2) %></span>
+                    <% } else { %>
+                      <span class="pres-price muted">Consultar</span>
+                    <% } %>
+                  </div>
+                  <% if (unitPrice > 0 && pres.units_per_package > 1) { %>
+                    <div class="pres-unit">
+                      $<%= unitPrice.toFixed(2) %> / ud.
+                    </div>
+                  <% } %>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </section>
+  <% }) %>
+</main>
+
+<footer class="footer">
+  <p>Inversiones Atlas &mdash; Precios en USD, sujetos a cambio sin previo aviso</p>
+</footer>
+
+</body>
+</html>
