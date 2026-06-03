@@ -1,6 +1,9 @@
 import cron from 'node-cron';
 import { createLogger } from '../../shared/logger.js';
 import { runHourlyDiagnostic } from '../agent/diagnostic-pipeline.js';
+import { runRateMonitor } from './jobs/rate-monitor.js';
+import { runStockAlert } from './jobs/stock-alert.js';
+import { registerEventListeners } from './listeners.js';
 
 const log = createLogger('manager').child({ module: 'scheduler' });
 
@@ -9,22 +12,38 @@ const tasks: cron.ScheduledTask[] = [];
 export function startScheduler() {
   log.info('Starting scheduler');
 
+  // Wire event bus → Telegram notifications
+  registerEventListeners();
+
   // Hourly diagnostic — every hour at minute 0
-  const diagnostic = cron.schedule('0 * * * *', () => {
-    log.info('Cron: hourly diagnostic triggered');
-    runHourlyDiagnostic().catch((err) => {
-      log.error({ err }, 'Cron: hourly diagnostic failed');
-    });
-  });
-  tasks.push(diagnostic);
+  tasks.push(
+    cron.schedule('0 * * * *', () => {
+      log.info('Cron: hourly diagnostic triggered');
+      runHourlyDiagnostic().catch((err) => {
+        log.error({ err }, 'Cron: hourly diagnostic failed');
+      });
+    }),
+  );
 
-  // TODO Phase 4: Rate monitor every 15 min
-  // const rateMonitor = cron.schedule('*/15 * * * *', () => { ... });
-  // tasks.push(rateMonitor);
+  // Rate monitor — every 15 minutes
+  tasks.push(
+    cron.schedule('*/15 * * * *', () => {
+      log.info('Cron: rate monitor triggered');
+      runRateMonitor().catch((err) => {
+        log.error({ err }, 'Cron: rate monitor failed');
+      });
+    }),
+  );
 
-  // TODO Phase 4: Stock alert every 30 min
-  // const stockAlert = cron.schedule('*/30 * * * *', () => { ... });
-  // tasks.push(stockAlert);
+  // Stock alert — every 30 minutes
+  tasks.push(
+    cron.schedule('*/30 * * * *', () => {
+      log.info('Cron: stock alert triggered');
+      runStockAlert().catch((err) => {
+        log.error({ err }, 'Cron: stock alert failed');
+      });
+    }),
+  );
 
   log.info({ jobs: tasks.length }, 'Scheduler started');
 }
