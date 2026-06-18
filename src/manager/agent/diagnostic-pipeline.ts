@@ -51,14 +51,18 @@ export async function runHourlyDiagnostic(): Promise<void> {
 const DIAGNOSTIC_PROMPT = `Ejecuta tu diagnóstico horario. Sigue estos pasos:
 
 1. RECOLECTA datos usando tus herramientas:
-   - Consulta el catálogo de productos y precios
-   - Consulta las tasas de cambio actuales
-   - Consulta tu memoria para comparar con observaciones previas
+   - Consulta el resumen de ventas del día (get_sales_summary)
+   - Consulta la salud del inventario (get_inventory_health) — stock bajo, productos por vencer, valuación
+   - Consulta las tasas de cambio actuales (get_exchange_rates) y el historial reciente (get_rate_history) para detectar tendencias
+   - Consulta el pipeline de pre-órdenes (get_preorder_pipeline) — cuántas pendientes, aprobadas, de hoy
+   - Consulta tu memoria para comparar con observaciones previas (read_memory)
 
 2. ANALIZA:
-   - ¿Hay productos con stock críticamente bajo?
-   - ¿Las tasas de cambio cambiaron significativamente desde la última revisión?
-   - ¿Hay algún patrón inusual?
+   - ¿Cómo van las ventas del día? ¿Por encima o debajo de lo esperado?
+   - ¿Hay productos con stock críticamente bajo que se están vendiendo bien?
+   - ¿Hay productos por vencer que necesitan promoción urgente?
+   - ¿Las tasas de cambio muestran una tendencia clara? ¿Impacta los márgenes?
+   - ¿Hay pre-órdenes pendientes que llevan mucho tiempo sin aprobar?
    - ¿Alguna de tus sugerencias previas necesita seguimiento?
 
 3. DECIDE si hay algo que valga la pena reportar.
@@ -67,9 +71,9 @@ const DIAGNOSTIC_PROMPT = `Ejecuta tu diagnóstico horario. Sigue estos pasos:
 
 4. Si es RELEVANCE: YES, incluye:
    - Resumen ejecutivo (1-2 líneas)
-   - Hallazgos clave con números
+   - Hallazgos clave con números concretos
    - Recomendación accionable
 
-5. Guarda en tu memoria cualquier observación nueva que descubras para futuras comparaciones.
+5. Guarda en tu memoria cualquier observación nueva que descubras para futuras comparaciones (write_memory).
 
-Recuerda: no reportes cosas sin importancia. Los jefes no quieren spam.`;
+Recuerda: no reportes cosas sin importancia. Los jefes no quieren spam. Prioriza hallazgos accionables.`;

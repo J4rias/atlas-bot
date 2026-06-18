@@ -75,14 +75,28 @@ function parseRegistryYaml(raw: string): Registry {
   let currentCategory: string | null = null;
   let currentItem: Partial<ActionDef> | null = null;
 
+  /** Flush currentItem into the right list before switching context. */
+  const flushItem = () => {
+    if (currentItem?.id && currentItem?.description) {
+      if (currentSection === 'restrictions') {
+        restrictions.push(currentItem as ActionDef);
+      } else if (currentCategory && capabilities[currentCategory]) {
+        capabilities[currentCategory].push(currentItem as ActionDef);
+      }
+    }
+    currentItem = null;
+  };
+
   for (const line of raw.split('\n')) {
     const trimmed = line.trimEnd();
 
     if (trimmed === 'capabilities:') {
+      flushItem();
       currentSection = 'capabilities';
       continue;
     }
     if (trimmed === '  restrictions:') {
+      flushItem();
       currentSection = 'restrictions';
       currentCategory = null;
       continue;
@@ -92,6 +106,7 @@ function parseRegistryYaml(raw: string): Registry {
       // Category line like "  read:" or "  analyze:"
       const catMatch = trimmed.match(/^  (\w+):$/);
       if (catMatch) {
+        flushItem();
         currentCategory = catMatch[1];
         capabilities[currentCategory] = [];
         continue;
@@ -100,9 +115,7 @@ function parseRegistryYaml(raw: string): Registry {
       // Item start "    - id: xyz"
       const idMatch = trimmed.match(/^\s+- id:\s*(.+)/);
       if (idMatch && currentCategory) {
-        if (currentItem?.id && currentItem?.description) {
-          capabilities[currentCategory].push(currentItem as ActionDef);
-        }
+        flushItem();
         currentItem = { id: idMatch[1].trim() };
         continue;
       }
@@ -118,9 +131,7 @@ function parseRegistryYaml(raw: string): Registry {
     if (currentSection === 'restrictions') {
       const idMatch = trimmed.match(/^\s+- id:\s*(.+)/);
       if (idMatch) {
-        if (currentItem?.id && currentItem?.description) {
-          restrictions.push(currentItem as ActionDef);
-        }
+        flushItem();
         currentItem = { id: idMatch[1].trim() };
         continue;
       }
@@ -134,13 +145,7 @@ function parseRegistryYaml(raw: string): Registry {
   }
 
   // Flush last item
-  if (currentItem?.id && currentItem?.description) {
-    if (currentSection === 'restrictions') {
-      restrictions.push(currentItem as ActionDef);
-    } else if (currentCategory && capabilities[currentCategory]) {
-      capabilities[currentCategory].push(currentItem as ActionDef);
-    }
-  }
+  flushItem();
 
   return { capabilities, restrictions };
 }

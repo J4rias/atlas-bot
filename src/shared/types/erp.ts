@@ -58,3 +58,171 @@ export interface ExchangeRate {
   rate: number;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Sales
+// ---------------------------------------------------------------------------
+
+export interface SalesSummary {
+  period: { from: string; to: string };
+  summary: {
+    sale_count: number;
+    total_sales: number;
+    total_paid: number;
+    total_credit: number;
+    cash_total?: number;
+    credit_total?: number;
+    mixed_total?: number;
+  };
+  top_products: Array<{
+    product_name: string;
+    total_quantity: number;
+    total_revenue: number;
+  }>;
+}
+
+export interface SalesStats {
+  totalSales: number;
+  totalRevenue: number;
+  totalRevenueCOP: number;
+  salesByType?: Array<{ sale_type: string; count: number; total: number }>;
+  salesByStatus?: Array<{ status: string; count: number; total: number }>;
+  topProducts?: Array<{
+    product_id: number;
+    total_quantity: number;
+    total_amount: number;
+    product?: { id: number; name: string; sku: string };
+  }>;
+  salesByCurrency?: Record<string, { count: number; total: number }>;
+}
+
+export interface DailyClosure {
+  date: string;
+  totalSalesUSD: number;
+  totalSalesCOP: number;
+  salesCount: number;
+  creditTotalUSD: number;
+  paymentsBreakdown: Record<string, Record<string, number>>;
+  creditCollectedByCurrency: Record<string, number>;
+  cashRefunds: { refund_cop: number; refund_usd: number; refund_count: number };
+}
+
+export interface ProductSalesItem {
+  product_id: number;
+  total_quantity: number;
+  num_sales: number;
+  total_usd: number;
+  total_cop: number;
+  product?: { id: number; name: string; sku: string };
+}
+
+// ---------------------------------------------------------------------------
+// Inventory alerts & valuation
+// ---------------------------------------------------------------------------
+
+export interface LowStockAlert {
+  product_id: number;
+  warehouse_id: number;
+  quantity: number;
+  available_quantity: number;
+  product?: {
+    id: number;
+    name: string;
+    sku: string;
+    reorder_point: number;
+    category?: { id: number; name: string };
+  };
+  warehouse?: { id: number; name: string };
+}
+
+export interface ExpiringAlert {
+  batch_number: string;
+  expiration_date: string;
+  quantity: number;
+  product?: {
+    id: number;
+    name: string;
+    sku: string;
+    category?: { id: number; name: string };
+  };
+  warehouse?: { id: number; name: string };
+}
+
+export interface InventoryValuation {
+  totalValue: number;
+  totalValueCOP: number;
+  productsWithStock: number;
+  totalsByCurrency: Record<string, number>;
+  items: Array<{
+    product: { id: number; name: string; sku: string };
+    quantity: number;
+    cost: number;
+    currency: string;
+    value: number;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Exchange rate history
+// ---------------------------------------------------------------------------
+
+export interface ExchangeRateHistoryItem {
+  id: number;
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  effective_date: string;
+  source: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-orders
+// ---------------------------------------------------------------------------
+
+export interface PreOrderDetail {
+  productId: number;
+  presentationId: number;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  product?: { id: number; name: string };
+  presentation?: { id: number; name: string; units_per_package: number };
+}
+
+export interface PreOrder {
+  id: number;
+  code: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  channel: string;
+  status: 'pending' | 'approved' | 'rejected' | 'converted' | 'expired';
+  subtotal: number;
+  total: number;
+  currency: string;
+  expiresAt: string | null;
+  created_at: string;
+  details: PreOrderDetail[];
+}
+
+export interface PreOrderStats {
+  pending: number;
+  approved: number;
+  today: number;
+}
+
+export interface CreatePreOrderInput {
+  customer_name?: string;
+  customer_phone?: string;
+  channel?: 'messenger' | 'telegram' | 'web';
+  notes?: string;
+  currency?: string;
+  items: Array<{
+    presentation_id: number;
+    quantity: number;
+    unit_price?: number;
+    is_unit?: boolean;
+    notes?: string;
+  }>;
+}

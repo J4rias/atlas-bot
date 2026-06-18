@@ -6,11 +6,35 @@ import type {
   PriceList,
   PriceListSummary,
   ExchangeRate,
+  SalesSummary,
+  SalesStats,
+  DailyClosure,
+  ProductSalesItem,
+  LowStockAlert,
+  ExpiringAlert,
+  InventoryValuation,
+  ExchangeRateHistoryItem,
+  PreOrder,
+  PreOrderStats,
+  CreatePreOrderInput,
 } from '../types/index.js';
 
 // Re-export types so consumers can import from services/erp
 export type { Category, Product, PriceList, PriceListSummary, ExchangeRate };
 export type { Presentation, PriceListDetail } from '../types/index.js';
+export type {
+  SalesSummary,
+  SalesStats,
+  DailyClosure,
+  ProductSalesItem,
+  LowStockAlert,
+  ExpiringAlert,
+  InventoryValuation,
+  ExchangeRateHistoryItem,
+  PreOrder,
+  PreOrderStats,
+  CreatePreOrderInput,
+} from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Simple TTL cache
@@ -147,4 +171,162 @@ export function totalStock(product: Product): number {
 /** Expose the raw axios client for advanced ERP queries. */
 export function getErpClient(): AxiosInstance {
   return client;
+}
+
+// ---------------------------------------------------------------------------
+// Sales
+// ---------------------------------------------------------------------------
+
+/** Sales summary for a date range (defaults to today). */
+export async function getSalesSummary(
+  from?: string,
+  to?: string,
+): Promise<SalesSummary> {
+  const params: Record<string, string> = {};
+  if (from) params.from = from;
+  if (to) params.to = to;
+
+  const { data: res } = await client.get('/api/sales/summary', { params });
+  return res.data;
+}
+
+/** Comprehensive sales stats for a date range. */
+export async function getSalesStats(opts?: {
+  startDate?: string;
+  endDate?: string;
+  warehouseId?: number;
+  summaryOnly?: boolean;
+  topLimit?: number;
+}): Promise<SalesStats> {
+  const params: Record<string, string | number | boolean> = {};
+  if (opts?.startDate) params.start_date = opts.startDate;
+  if (opts?.endDate) params.end_date = opts.endDate;
+  if (opts?.warehouseId) params.warehouse_id = opts.warehouseId;
+  if (opts?.summaryOnly) params.summary_only = true;
+  if (opts?.topLimit) params.top_limit = opts.topLimit;
+
+  const { data: res } = await client.get('/api/sales/stats', { params });
+  return res.stats;
+}
+
+/** Daily closure report. Defaults to today. */
+export async function getDailyClosure(
+  date?: string,
+  userId?: number,
+): Promise<DailyClosure> {
+  const params: Record<string, string | number> = {};
+  if (date) params.date = date;
+  if (userId) params.user_id = userId;
+
+  const { data: res } = await client.get('/api/sales/daily-closure', { params });
+  return res;
+}
+
+/** Product-level sales breakdown for a date range. */
+export async function getProductSales(
+  startDate?: string,
+  endDate?: string,
+): Promise<ProductSalesItem[]> {
+  const params: Record<string, string> = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+
+  const { data: res } = await client.get('/api/sales/product-sales', { params });
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Inventory alerts & valuation
+// ---------------------------------------------------------------------------
+
+/** Products below their reorder point. */
+export async function getLowStockAlerts(
+  warehouseId?: number,
+): Promise<LowStockAlert[]> {
+  const params: Record<string, number> = {};
+  if (warehouseId) params.warehouse_id = warehouseId;
+
+  const { data: res } = await client.get('/api/inventory/alerts/low-stock', { params });
+  return res.data;
+}
+
+/** Products expiring within N days. */
+export async function getExpiringAlerts(
+  days = 30,
+  warehouseId?: number,
+): Promise<ExpiringAlert[]> {
+  const params: Record<string, number> = { days };
+  if (warehouseId) params.warehouse_id = warehouseId;
+
+  const { data: res } = await client.get('/api/inventory/alerts/expiring', { params });
+  return res.data;
+}
+
+/** Inventory valuation across warehouses. */
+export async function getInventoryValuation(
+  warehouseId?: number,
+): Promise<InventoryValuation> {
+  const params: Record<string, number> = {};
+  if (warehouseId) params.warehouse_id = warehouseId;
+
+  const { data: res } = await client.get('/api/inventory/valuation', { params });
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Exchange rate history
+// ---------------------------------------------------------------------------
+
+/** Historical exchange rates with optional filters. */
+export async function getRateHistory(opts?: {
+  fromCurrency?: string;
+  toCurrency?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}): Promise<ExchangeRateHistoryItem[]> {
+  const params: Record<string, string | number> = {};
+  if (opts?.fromCurrency) params.from_currency = opts.fromCurrency;
+  if (opts?.toCurrency) params.to_currency = opts.toCurrency;
+  if (opts?.dateFrom) params.date_from = opts.dateFrom;
+  if (opts?.dateTo) params.date_to = opts.dateTo;
+  if (opts?.limit) params.limit = opts.limit;
+
+  const { data: res } = await client.get('/api/exchange-rates', { params });
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-orders
+// ---------------------------------------------------------------------------
+
+/** List pre-orders with optional filters. */
+export async function getPreOrders(opts?: {
+  status?: 'pending' | 'approved' | 'rejected' | 'converted' | 'expired';
+  channel?: 'messenger' | 'telegram' | 'web';
+  page?: number;
+  limit?: number;
+}): Promise<{ data: PreOrder[]; pagination: { total: number; page: number; totalPages: number } }> {
+  const params: Record<string, string | number> = {};
+  if (opts?.status) params.status = opts.status;
+  if (opts?.channel) params.channel = opts.channel;
+  if (opts?.page) params.page = opts.page;
+  if (opts?.limit) params.limit = opts.limit;
+
+  const { data: res } = await client.get('/api/pre-orders', { params });
+  return { data: res.data, pagination: res.pagination };
+}
+
+/** Pre-order counts: pending, approved, created today. */
+export async function getPreOrderStats(): Promise<PreOrderStats> {
+  const { data: res } = await client.get('/api/pre-orders/stats');
+  return res.data;
+}
+
+/** Create a pre-order from the Consultant bot. */
+export async function createPreOrder(
+  input: CreatePreOrderInput,
+): Promise<PreOrder> {
+  const { data: res } = await client.post('/api/pre-orders', input);
+  return res.data;
 }

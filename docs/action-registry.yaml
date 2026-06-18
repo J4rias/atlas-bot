@@ -1,60 +1,87 @@
 agent: manager
-version: "1.0"
+version: "2.0"
+
+tools:
+  # Shared ERP tools (catalog & pricing)
+  catalog:
+    - tool: search_products
+      description: "Buscar productos en el catálogo (nombre, SKU, categoría, stock, presentaciones)"
+      erp_endpoint: "GET /api/products"
+      status: implemented
+
+    - tool: get_prices
+      description: "Obtener lista de precios activa (precio por presentación en USD)"
+      erp_endpoint: "GET /api/price-lists/active + GET /api/price-lists/:id"
+      status: implemented
+
+    - tool: get_exchange_rates
+      description: "Obtener tasas de cambio actuales (Tasa Atlas)"
+      erp_endpoint: "GET /api/exchange-rates/latest"
+      status: implemented
+
+    - tool: get_categories
+      description: "Listar categorías de productos con conteo"
+      erp_endpoint: "GET /api/categories"
+      status: implemented
+
+  # Business intelligence tools (Manager-only)
+  sales:
+    - tool: get_sales_summary
+      description: "Resumen ejecutivo de ventas por periodo (conteo, revenue, top productos)"
+      erp_endpoint: "GET /api/sales/summary"
+      status: implemented
+
+    - tool: get_sales_stats
+      description: "Stats detalladas: desglose por tipo, moneda, estado, top productos por revenue"
+      erp_endpoint: "GET /api/sales/stats"
+      status: implemented
+
+  inventory:
+    - tool: get_inventory_health
+      description: "Salud del inventario: stock bajo + productos por vencer + valuación total"
+      erp_endpoints:
+        - "GET /api/inventory/alerts/low-stock"
+        - "GET /api/inventory/alerts/expiring"
+        - "GET /api/inventory/valuation"
+      status: implemented
+
+  rates:
+    - tool: get_rate_history
+      description: "Historial de tasas de cambio con filtros de moneda y fecha"
+      erp_endpoint: "GET /api/exchange-rates"
+      status: implemented
+
+  preorders:
+    - tool: get_preorder_pipeline
+      description: "Pipeline de pre-órdenes: stats (pendientes/aprobadas/hoy) + listado reciente"
+      erp_endpoints:
+        - "GET /api/pre-orders/stats"
+        - "GET /api/pre-orders"
+      status: implemented
+
+  # Memory tools
+  memory:
+    - tool: read_memory
+      description: "Consultar memorias propias para contexto"
+      status: implemented
+
+    - tool: write_memory
+      description: "Guardar nueva observación, insight o decisión"
+      status: implemented
 
 capabilities:
-  read:
-    - id: read_sales_data
-      description: "Consultar datos de ventas del ERP (productos vendidos, montos, fechas)"
-      erp_endpoints:
-        - "GET /api/sales"
-        - "GET /api/sales/summary"
-        - "GET /api/sales/top-products"
-        - "GET /api/sales/by-currency"
-        - "GET /api/sales/by-customer"
-
-    - id: read_inventory
-      description: "Consultar niveles de inventario por bodega"
-      erp_endpoints:
-        - "GET /api/inventory/warehouse/:id"
-
-    - id: read_exchange_rates
-      description: "Consultar tasas de cambio actuales (Tasa Atlas)"
-      erp_endpoints:
-        - "GET /api/exchange-rates/latest"
-        - "GET /api/dashboard/rate-history"
-
-    - id: read_customer_data
-      description: "Consultar datos de clientes activos y estado de crédito"
-      erp_endpoints:
-        - "GET /api/customers/active"
-        - "GET /api/customers/:id/credit-summary"
-
-    - id: read_preorders
-      description: "Consultar pre-órdenes pendientes"
-      erp_endpoints:
-        - "GET /api/pre-orders?status=pending"
-
-    - id: read_kpis
-      description: "Consultar KPIs en tiempo real (ventas, márgenes, conversión)"
-      erp_endpoints:
-        - "GET /api/dashboard/kpis"
-        - "GET /api/dashboard/inventory-health"
-
   analyze:
     - id: sales_trend_analysis
       description: "Analizar tendencias de ventas (diarias, semanales, mensuales)"
 
     - id: inventory_health_check
-      description: "Evaluar salud del inventario: productos bajo stock, sobre stock, sin rotación"
+      description: "Evaluar salud del inventario: productos bajo stock, por vencer, sin rotación"
 
     - id: rate_impact_analysis
       description: "Analizar impacto de cambios en tasas de cambio sobre márgenes"
 
-    - id: customer_segmentation
-      description: "Analizar patrones de compra y segmentar clientes"
-
     - id: preorder_pipeline
-      description: "Analizar pipeline de pre-órdenes: pendientes, aprobadas, rechazadas, tiempos"
+      description: "Analizar pipeline de pre-órdenes: pendientes, tiempos, conversión"
 
   notify:
     - id: send_diagnostic_report
@@ -68,16 +95,6 @@ capabilities:
 
     - id: escalate_to_tech
       description: "Reportar limitación técnica o error al programador vía mensaje privado"
-
-  memory:
-    - id: read_own_memory
-      description: "Consultar memorias propias para contexto"
-
-    - id: write_memory
-      description: "Guardar nueva observación, insight o decisión"
-
-    - id: record_outcome
-      description: "Registrar resultado de una sugerencia previa (aceptada, rechazada, resultado real)"
 
   restrictions:
     - id: no_write_erp
