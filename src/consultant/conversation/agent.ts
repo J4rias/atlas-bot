@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient, MODEL_SONNET } from '../../shared/ai/client.js';
 import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.js';
-import { quotePriceToolDef, executeQuotePrice, upsellSuggestToolDef, executeUpsellSuggest } from '../tools/index.js';
+import { quotePriceToolDef, executeQuotePrice, upsellSuggestToolDef, executeUpsellSuggest, createPreorderToolDef, executeCreatePreorder } from '../tools/index.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ConversationState, CustomerProfile } from './manager.js';
@@ -19,6 +19,7 @@ const consultantTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   quotePriceToolDef,
   upsellSuggestToolDef,
+  createPreorderToolDef,
 ];
 
 /**
@@ -69,6 +70,11 @@ export async function getAgentResponse(
             result = await executeQuotePrice(toolUse.input as unknown as Parameters<typeof executeQuotePrice>[0]);
           } else if (toolUse.name === 'suggest_upsell') {
             result = await executeUpsellSuggest(toolUse.input as unknown as Parameters<typeof executeUpsellSuggest>[0]);
+          } else if (toolUse.name === 'create_preorder') {
+            result = await executeCreatePreorder(
+              toolUse.input as unknown as Parameters<typeof executeCreatePreorder>[0],
+              conversation.channel as 'messenger' | 'telegram' | 'web',
+            );
           } else {
             result = await executeErpTool(toolUse.name, toolUse.input);
           }

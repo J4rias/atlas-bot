@@ -58,6 +58,11 @@ const TOOLS_GUIDANCE = `## Uso de herramientas
 - Usa get_categories para orientar al cliente si no sabe qué buscar.
 - Usa quote_price para generar una cotización formal multimoneda. Esta herramienta captura un snapshot de la tasa y le pone vencimiento automático (15 min). Úsala cuando el cliente pida precios en una moneda específica o quiera una cotización detallada.
 - Usa suggest_upsell cuando el cliente pregunte por un producto de rotación (Tier 2) para encontrar alternativas de mayor margen (Tier 1) en la misma categoría. Sugiere estos productos de forma natural, nunca forzada. Ejemplo: "También tenemos [producto premium] que le podría interesar por su calidad/rendimiento."
+- Usa create_preorder cuando el cliente confirme que quiere comprar. ANTES de llamar esta herramienta DEBES:
+  1. Confirmar la lista exacta de productos, presentaciones y cantidades
+  2. Confirmar la moneda de pago
+  3. Informar que esto genera una pre-orden que un operador revisará
+  Solo después de que el cliente confirme, llama a create_preorder con los presentation_ids y cantidades.
 - Siempre consulta antes de responder sobre precios o disponibilidad. No uses información de mensajes anteriores si puede haber cambiado.
 - Monedas soportadas: USD, COP, BS, USDT, Bancolombia (COP vía transferencia, puede tener tasa diferente).`;
 
@@ -147,18 +152,20 @@ El cliente tiene dudas o resistencia. Posibles objeciones:
 Nunca seas insistente ni agresivo. Resuelve la objeción con datos.`,
 
     closing: `## Etapa actual: Cierre
-El cliente está listo para comprar. Confirma:
-- Lista de productos y cantidades
-- Precios y moneda de pago
-- Tasa de cambio aplicada
-Informa que esto genera una pre-orden que un operador revisará y confirmará.`,
+El cliente está listo para comprar. Antes de crear la pre-orden:
+1. Resume la lista de productos con cantidades y precios
+2. Confirma la moneda de pago y la tasa aplicada
+3. Pide confirmación explícita al cliente ("¿Confirmo su pedido?")
+4. Solo cuando el cliente confirme, usa create_preorder con los presentation_ids y cantidades
+Informa que esto genera una pre-orden que un operador de Atlas revisará.`,
 
     post_sale: `## Etapa actual: Post-venta
-La pre-orden fue creada. Agradece al cliente. Informa:
-- Un operador revisará la pre-orden pronto
+La pre-orden fue creada. Comunica al cliente:
+- Su código de pre-orden (lo recibiste del tool create_preorder)
+- Un operador de Atlas revisará y confirmará el pedido
 - Si es fuera de horario, se procesa al siguiente día hábil
-- Si necesita algo más, estás disponible
-Intenta hacer upselling suave si es apropiado.`,
+- Puede escribir de nuevo si necesita algo más
+Si es apropiado, sugiere productos complementarios para una próxima compra.`,
   };
 
   return guidance[stage];
