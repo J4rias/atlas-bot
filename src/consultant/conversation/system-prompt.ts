@@ -1,17 +1,21 @@
 import type { SalesStage } from './stages.js';
+import type { CustomerProfile } from './manager.js';
 
 /**
  * Build the system prompt for the Consultor de Negocios.
  *
- * The prompt adapts based on the current sales stage so Claude
- * knows where the conversation stands and what to prioritize.
+ * The prompt adapts based on the current sales stage and detected
+ * customer profile so Claude knows where the conversation stands
+ * and what to prioritize.
  */
-export function buildSystemPrompt(stage: SalesStage): string {
+export function buildSystemPrompt(stage: SalesStage, profile: CustomerProfile = 'unknown'): string {
   return `${IDENTITY}
 
 ${RULES}
 
 ${TOOLS_GUIDANCE}
+
+${profileGuidance(profile)}
 
 ${stageGuidance(stage)}
 
@@ -53,6 +57,7 @@ const TOOLS_GUIDANCE = `## Uso de herramientas
 - Usa get_exchange_rates para ver las tasas de cambio actuales (Tasa Atlas).
 - Usa get_categories para orientar al cliente si no sabe qué buscar.
 - Usa quote_price para generar una cotización formal multimoneda. Esta herramienta captura un snapshot de la tasa y le pone vencimiento automático (15 min). Úsala cuando el cliente pida precios en una moneda específica o quiera una cotización detallada.
+- Usa suggest_upsell cuando el cliente pregunte por un producto de rotación (Tier 2) para encontrar alternativas de mayor margen (Tier 1) en la misma categoría. Sugiere estos productos de forma natural, nunca forzada. Ejemplo: "También tenemos [producto premium] que le podría interesar por su calidad/rendimiento."
 - Siempre consulta antes de responder sobre precios o disponibilidad. No uses información de mensajes anteriores si puede haber cambiado.
 - Monedas soportadas: USD, COP, BS, USDT, Bancolombia (COP vía transferencia, puede tener tasa diferente).`;
 
@@ -63,6 +68,45 @@ const FORMAT_RULES = `## Formato de respuesta
 - No uses emojis en exceso — máximo 1-2 por mensaje si es apropiado.
 - Si la respuesta incluye precios, formátalos claramente:
   Ejemplo: "Harina PAN 1kg - Paquete (12 uds): $14.50 / Unidad: $1.35"`;
+
+// ---------------------------------------------------------------------------
+// Profile-specific guidance
+// ---------------------------------------------------------------------------
+
+function profileGuidance(profile: CustomerProfile): string {
+  const guidance: Record<CustomerProfile, string> = {
+    mayorista: `## Perfil del cliente: Mayorista
+Este cliente compra en volumen. Enfócate en:
+- Presentaciones grandes (bultos, cajas, paquetes de mayor cantidad)
+- Precios por volumen — destaca el ahorro unitario en paquetes grandes
+- Disponibilidad de stock para pedidos grandes
+- Productos de rotación rápida que necesita reponer frecuentemente
+- Usa suggest_upsell para ofrecer productos premium con mejor margen que complementen su pedido`,
+
+    minorista: `## Perfil del cliente: Minorista
+Este cliente compra en cantidades pequeñas para consumo personal o tienda pequeña. Enfócate en:
+- Presentaciones individuales o pequeñas
+- Precio unitario claro
+- Variedad — puede que quiera probar diferentes productos
+- Usa suggest_upsell para ofrecer opciones de mejor calidad que podrían interesarle`,
+
+    indeciso: `## Perfil del cliente: Indeciso
+Este cliente no tiene claro qué necesita. Enfócate en:
+- Hacer preguntas para entender su necesidad
+- Ofrecer opciones concretas (no más de 3 a la vez)
+- Guiar la conversación hacia productos populares o con buen stock
+- No abrumar con demasiada información`,
+
+    unknown: `## Perfil del cliente: Por determinar
+Aún no sabes si el cliente es mayorista, minorista o indeciso. Observa señales:
+- Cantidades grandes, "para mi negocio", menciona tienda/local → mayorista
+- Cantidades pequeñas, "para mi casa", compra individual → minorista
+- Preguntas vagas, "qué me recomiendan", sin cantidad clara → indeciso
+Adapta tu enfoque según lo que detectes.`,
+  };
+
+  return guidance[profile];
+}
 
 // ---------------------------------------------------------------------------
 // Stage-specific guidance

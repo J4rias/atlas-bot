@@ -1,11 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient, MODEL_SONNET } from '../../shared/ai/client.js';
 import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.js';
-import { quotePriceToolDef, executeQuotePrice } from '../tools/index.js';
+import { quotePriceToolDef, executeQuotePrice, upsellSuggestToolDef, executeUpsellSuggest } from '../tools/index.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import type { ConversationState } from './manager.js';
-import { addAssistantMessage, setStage } from './manager.js';
+import type { ConversationState, CustomerProfile } from './manager.js';
+import { addAssistantMessage, setStage, setProfile } from './manager.js';
 import type { SalesStage } from './stages.js';
 import { SALES_STAGES } from './stages.js';
 
@@ -18,6 +18,7 @@ const MAX_TOOL_ROUNDS = 5;
 const consultantTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   quotePriceToolDef,
+  upsellSuggestToolDef,
 ];
 
 /**
@@ -30,7 +31,7 @@ export async function getAgentResponse(
   conversation: ConversationState,
 ): Promise<string> {
   const client = getAnthropicClient();
-  const systemPrompt = buildSystemPrompt(conversation.stage);
+  const systemPrompt = buildSystemPrompt(conversation.stage, conversation.profile);
 
   let toolRounds = 0;
   // Build a working copy of messages for this request
@@ -63,9 +64,14 @@ export async function getAgentResponse(
       for (const toolUse of toolUseBlocks) {
         log.debug({ tool: toolUse.name, input: toolUse.input }, 'Tool call');
         try {
-          const result = toolUse.name === 'quote_price'
-            ? await executeQuotePrice(toolUse.input as unknown as Parameters<typeof executeQuotePrice>[0])
-            : await executeErpTool(toolUse.name, toolUse.input);
+          let result: string;
+          if (toolUse.name === 'quote_price') {
+            result = await executeQuotePrice(toolUse.input as unknown as Parameters<typeof executeQuotePrice>[0]);
+          } else if (toolUse.name === 'suggest_upsell') {
+            result = await executeUpsellSuggest(toolUse.input as unknown as Parameters<typeof executeUpsellSuggest>[0]);
+          } else {
+            result = await executeErpTool(toolUse.name, toolUse.input);
+          }
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolUse.id,
@@ -97,13 +103,15 @@ export async function getAgentResponse(
     // Save the final assistant message to conversation history
     addAssistantMessage(conversation, fullText);
 
-    // Detect sales stage from response metadata
+    // Detect sales stage and customer profile from conversation
     detectStage(conversation, fullText);
+    detectProfile(conversation);
 
     log.info(
       {
         senderId: conversation.senderId,
         stage: conversation.stage,
+        profile: conversation.profile,
         toolRounds,
         tokensIn: response.usage.input_tokens,
         tokensOut: response.usage.output_tokens,
@@ -148,5 +156,47 @@ function detectStage(conversation: ConversationState, text: string) {
 
   if (lower.includes('pre-orden') || lower.includes('pedido') || lower.includes('confirmar')) {
     setStage(conversation, 'closing');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Customer profile detection based on user messages
+// ---------------------------------------------------------------------------
+
+const MAYORISTA_SIGNALS = [
+  'por mayor', 'al mayor', 'mayoreo', 'bulto', 'bultos',
+  'para mi negocio', 'para el negocio', 'para la tienda',
+  'tengo un local', 'tengo una tienda', 'mi bodega',
+  'cajas completas', 'por cantidad', 'en cantidad',
+  'compro bastante', 'compro regular',
+];
+
+const MINORISTA_SIGNALS = [
+  'para mi casa', 'personal', 'unidad', 'poquito',
+  'una sola', 'un solo', 'al detal', 'al detalle',
+  'para consumo', 'para la casa',
+];
+
+function detectProfile(conversation: ConversationState) {
+  // Don't downgrade once detected (mayorista/minorista are sticky)
+  if (conversation.profile === 'mayorista' || conversation.profile === 'minorista') return;
+
+  // Scan user messages for signals
+  const userTexts = conversation.messages
+    .filter((m) => m.role === 'user')
+    .map((m) => (typeof m.content === 'string' ? m.content : '').toLowerCase());
+
+  const combined = userTexts.join(' ');
+
+  const mayorista = MAYORISTA_SIGNALS.some((s) => combined.includes(s));
+  const minorista = MINORISTA_SIGNALS.some((s) => combined.includes(s));
+
+  if (mayorista && !minorista) {
+    setProfile(conversation, 'mayorista');
+  } else if (minorista && !mayorista) {
+    setProfile(conversation, 'minorista');
+  } else if (conversation.profile === 'unknown' && conversation.messages.length >= 6) {
+    // After several exchanges without clear signals → indeciso
+    setProfile(conversation, 'indeciso');
   }
 }

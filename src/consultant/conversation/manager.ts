@@ -2,6 +2,12 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { SalesStage } from './stages.js';
 
 // ---------------------------------------------------------------------------
+// Customer profile (detected during conversation)
+// ---------------------------------------------------------------------------
+
+export type CustomerProfile = 'mayorista' | 'minorista' | 'indeciso' | 'unknown';
+
+// ---------------------------------------------------------------------------
 // Per-sender conversation state
 // ---------------------------------------------------------------------------
 
@@ -9,6 +15,7 @@ export interface ConversationState {
   senderId: string;
   channel: string;
   stage: SalesStage;
+  profile: CustomerProfile;
   messages: Anthropic.MessageParam[];
   startedAt: Date;
   lastMessageAt: Date;
@@ -39,6 +46,7 @@ export function getConversation(senderId: string, channel: string): Conversation
     senderId,
     channel,
     stage: 'greeting',
+    profile: 'unknown',
     messages: [],
     startedAt: new Date(),
     lastMessageAt: new Date(),
@@ -66,6 +74,11 @@ export function addAssistantMessage(state: ConversationState, text: string) {
 /** Update the detected sales stage. */
 export function setStage(state: ConversationState, stage: SalesStage) {
   state.stage = stage;
+}
+
+/** Update the detected customer profile. */
+export function setProfile(state: ConversationState, profile: CustomerProfile) {
+  state.profile = profile;
 }
 
 /** How many active conversations are tracked. */
