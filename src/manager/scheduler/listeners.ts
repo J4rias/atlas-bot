@@ -1,6 +1,7 @@
 import { eventBus } from './triggers/event-bus.js';
 import { notifyBosses } from '../telegram/notifications.js';
 import { createLogger } from '../../shared/logger.js';
+import { runManagerAgent } from '../agent/agent.js';
 
 const log = createLogger('manager').child({ module: 'listeners' });
 
@@ -16,17 +17,34 @@ export function registerEventListeners() {
     deltaPct: number;
   }) => {
     const direction = data.newRate > data.oldRate ? 'subió' : 'bajó';
-    const message =
+    const alertMessage =
       `*ALERTA DE TASA*\n\n` +
       `La tasa *${data.currency}* ${direction} un *${data.deltaPct}%*\n` +
       `Anterior: ${data.oldRate.toFixed(2)}\n` +
-      `Actual: ${data.newRate.toFixed(2)}\n\n` +
-      `Revise si es necesario ajustar precios o congelar cotizaciones.`;
+      `Actual: ${data.newRate.toFixed(2)}`;
 
-    log.info({ currency: data.currency, deltaPct: data.deltaPct }, 'Sending rate alert');
-    notifyBosses(message).catch((err) => {
-      log.error({ err }, 'Failed to send rate alert');
-    });
+    log.info({ currency: data.currency, deltaPct: data.deltaPct }, 'Sending rate alert with impact analysis');
+
+    // Fire reactive analysis alongside the alert
+    runManagerAgent(
+      `La tasa ${data.currency} acaba de ${direction === 'subió' ? 'subir' : 'bajar'} un ${data.deltaPct}% ` +
+      `(de ${data.oldRate.toFixed(2)} a ${data.newRate.toFixed(2)}). ` +
+      `Usa analyze_rate_sales_impact para analizar los últimos 7 días y dime: ` +
+      `¿cómo impacta este cambio en las ventas basado en el patrón histórico? ` +
+      `Sé breve (máximo 3-4 líneas). Incluye el coeficiente de correlación y la cuantificación.`,
+      { preamble: 'Análisis reactivo por cambio significativo de tasa.', maxTokens: 1024 },
+    )
+      .then((analysis) => {
+        const fullMessage = `${alertMessage}\n\n*Análisis de impacto:*\n${analysis}`;
+        return notifyBosses(fullMessage);
+      })
+      .catch((err) => {
+        // If analysis fails, still send the basic alert
+        log.error({ err }, 'Rate impact analysis failed — sending basic alert');
+        notifyBosses(`${alertMessage}\n\nRevise si es necesario ajustar precios o congelar cotizaciones.`).catch(
+          (e) => log.error({ err: e }, 'Failed to send rate alert'),
+        );
+      });
   });
 
   eventBus.on('stock:critical-low-batch', (products: {

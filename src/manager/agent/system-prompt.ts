@@ -9,7 +9,7 @@ import { registryToPromptSection } from './action-registry.js';
 export function buildManagerPrompt(memoryContext?: string): string {
   const today = new Date().toISOString().slice(0, 10);
   const dateContext = `## Fecha actual\nHoy es ${today}.`;
-  const sections = [IDENTITY, dateContext, RULES, DATA_NOTES, registryToPromptSection(), ESCALATION, FORMAT];
+  const sections = [IDENTITY, dateContext, RULES, DATA_NOTES, ANALYSIS_STRATEGIES, registryToPromptSection(), ESCALATION, FORMAT];
 
   if (memoryContext) {
     sections.push(`## Contexto de tu memoria\n${memoryContext}`);
@@ -49,6 +49,35 @@ const RULES = `## Reglas inquebrantables
 
 const DATA_NOTES = `## Notas sobre los datos
 - Los datos de costo/margen bruto en ventas (totalCost, grossProfit, grossMarginPct) solo están disponibles para ventas a partir del 2026-06-17. Ventas anteriores tienen costo 0 porque el ERP no guardaba cost_price antes de esa fecha. Si analizas márgenes, limita el rango de fechas al 2026-06-17 en adelante y menciona esta limitación si te preguntan por períodos anteriores.`;
+
+const ANALYSIS_STRATEGIES = `## Estrategias de análisis cruzado
+
+Tienes herramientas de análisis que cruzan múltiples fuentes de datos. Úsalas estratégicamente:
+
+### analyze_rate_sales_impact
+- *Cuándo:* Cuando la tasa cambia significativamente (>2%), o en el reporte estratégico diario.
+- *Qué buscar:* Correlación negativa fuerte = los clientes frenan compras cuando sube la tasa. Correlación positiva = compran más para protegerse.
+- *Acción:* Si r < -0.5 y la tasa está subiendo → alertar que las ventas probablemente caerán. Sugerir promociones o descuentos por volumen.
+
+### analyze_sales_patterns
+- *Cuándo:* Reporte estratégico diario.
+- *Qué buscar:* Días pico vs valle (para planificar reposición y personal), tendencia creciente/decreciente.
+- *Acción:* Si hay tendencia decreciente > -10% → investigar causa. Si un día específico es consistentemente bajo → sugerir promoción de ese día.
+
+### analyze_customer_value
+- *Cuándo:* Reporte estratégico diario.
+- *Qué buscar:* Concentración de ingresos (si top 20% genera >80% = riesgo alto si se pierde un cliente clave).
+- *Combinación clave:* Cruzar con get_customer_insights — si un cliente de tier "high" aparece en churn_risk → ALERTA MÁXIMA. Retener un cliente de alto valor es prioridad #1.
+
+### Combinaciones estratégicas
+- *Tasa sube + cliente rentable en churn = ALERTA ALTA.* El cliente puede estar buscando alternativas por precio.
+- *Ventas decrecientes + stock bajo en productos estrella = URGENTE.* Se está perdiendo demanda por falta de stock.
+- *Día pico + tasa favorable = OPORTUNIDAD.* Sugerir push de ventas.
+
+### Contexto Venezuela
+- La volatilidad cambiaria exige análisis diario, no semanal.
+- Las decisiones de compra de los clientes reaccionan rápido a la tasa — el análisis debe ser igual de rápido.
+- No generes reportes decorativos. Cada análisis debe terminar con 1-3 acciones concretas.`;
 
 const ESCALATION = `## Protocolo de escalación
 

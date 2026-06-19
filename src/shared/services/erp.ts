@@ -18,6 +18,7 @@ import type {
   CreatePreOrderInput,
   CustomerPurchase,
   CustomerActivity,
+  DailySalesPoint,
 } from '../types/index.js';
 
 // Re-export types so consumers can import from services/erp
@@ -36,6 +37,7 @@ export type {
   CreatePreOrderInput,
   CustomerPurchase,
   CustomerActivity,
+  DailySalesPoint,
 } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
@@ -234,6 +236,17 @@ export async function getProductSales(
   if (endDate) params.end_date = endDate;
 
   const { data: res } = await client.get('/api/sales/product-sales', { params });
+  return res.data;
+}
+
+/** Daily sales series for cross-analysis (rate vs sales, seasonality). */
+export async function getDailySalesSeries(
+  from: string,
+  to: string,
+): Promise<DailySalesPoint[]> {
+  const { data: res } = await client.get('/api/sales/daily-series', {
+    params: { from, to },
+  });
   return res.data;
 }
 

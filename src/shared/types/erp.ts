@@ -236,6 +236,19 @@ export interface CustomerActivity {
   avg_days_between_purchases: number;
 }
 
+// ---------------------------------------------------------------------------
+// Daily sales series (for cross-analysis)
+// ---------------------------------------------------------------------------
+
+export interface DailySalesPoint {
+  date: string;
+  sale_count: number;
+  total_usd: number;
+  total_cop: number;
+  total_cost: number;
+  gross_profit: number;
+}
+
 export interface CreatePreOrderInput {
   customer_name?: string;
   customer_phone?: string;

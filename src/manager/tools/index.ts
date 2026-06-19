@@ -2,6 +2,11 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.js';
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
 import * as erp from '../../shared/services/erp.js';
+import {
+  computeRateSalesCorrelation,
+  computeWeeklySeasonality,
+  computeCustomerProfitability,
+} from '../analysis/computations.js';
 
 // ---------------------------------------------------------------------------
 // Manager-specific tool definitions
@@ -207,10 +212,72 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
   },
 ];
 
-/** All tools available to the Manager: shared ERP tools + BI tools + memory tools. */
+const crossAnalysisTools: Anthropic.Tool[] = [
+  {
+    name: 'analyze_rate_sales_impact',
+    description:
+      'Analyze the correlation between exchange rate movements and sales volume over a date range. ' +
+      'Uses Pearson correlation to quantify how rate changes affect sales. ' +
+      'Use this reactively when rates change significantly, or in the daily strategic report.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Look-back window in days (default 7)',
+        },
+        currency: {
+          type: 'string',
+          description: 'Currency pair to analyze — the "from" currency (e.g., "USD"). Default: all currencies.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'analyze_sales_patterns',
+    description:
+      'Analyze sales patterns: weekly seasonality (best/worst day), volume trends. ' +
+      'Use this in the daily strategic report to detect shifts in buying behavior.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Look-back window in days (default 28 — 4 weeks)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'analyze_customer_value',
+    description:
+      'Analyze customer profitability and value segmentation. Ranks customers by revenue, ' +
+      'assigns value tiers (high/medium/low), and calculates revenue concentration (top 20% share). ' +
+      'Cross-reference with churn risk from get_customer_insights for high-priority retention alerts.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Look-back window in days for customer activity (default 30)',
+        },
+        top_n: {
+          type: 'number',
+          description: 'Max customers to return in the ranking (default 20)',
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+/** All tools available to the Manager: shared ERP tools + BI tools + cross-analysis tools + memory tools. */
 export const allManagerTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   ...businessIntelligenceTools,
+  ...crossAnalysisTools,
   ...memoryTools,
 ];
 
@@ -460,6 +527,108 @@ export async function executeManagerTool(
         reorder_due: { count: reorderDue.length, customers: reorderDue },
         new_inactive: { count: newInactive.length, customers: newInactive },
         healthy: { count: healthy.length },
+      });
+    }
+
+    // ----- Cross-analysis tools -----
+
+    case 'analyze_rate_sales_impact': {
+      const days = (input.days as number) ?? 7;
+      const currency = input.currency as string | undefined;
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+
+      const [dailySales, rateHistory] = await Promise.all([
+        erp.getDailySalesSeries(from, to),
+        erp.getRateHistory({
+          fromCurrency: currency,
+          dateFrom: from,
+          dateTo: to,
+          limit: days * 5, // multiple currencies per day
+        }),
+      ]);
+
+      const correlation = computeRateSalesCorrelation(dailySales, rateHistory);
+
+      return JSON.stringify({
+        period: { from, to, days },
+        currency_filter: currency ?? 'all',
+        daily_sales_points: dailySales.length,
+        rate_data_points: rateHistory.length,
+        correlation,
+      });
+    }
+
+    case 'analyze_sales_patterns': {
+      const days = (input.days as number) ?? 28;
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+
+      const dailySales = await erp.getDailySalesSeries(from, to);
+      const seasonality = computeWeeklySeasonality(dailySales);
+
+      // Simple trend: compare first half vs second half
+      const mid = Math.floor(dailySales.length / 2);
+      const firstHalf = dailySales.slice(0, mid);
+      const secondHalf = dailySales.slice(mid);
+      const avgFirst = firstHalf.length > 0
+        ? firstHalf.reduce((s, d) => s + d.total_usd, 0) / firstHalf.length
+        : 0;
+      const avgSecond = secondHalf.length > 0
+        ? secondHalf.reduce((s, d) => s + d.total_usd, 0) / secondHalf.length
+        : 0;
+      const trendPct = avgFirst > 0
+        ? Math.round(((avgSecond - avgFirst) / avgFirst) * 1000) / 10
+        : 0;
+
+      return JSON.stringify({
+        period: { from, to, days },
+        total_days_with_data: dailySales.length,
+        seasonality,
+        trend: {
+          first_half_avg_usd: Math.round(avgFirst * 100) / 100,
+          second_half_avg_usd: Math.round(avgSecond * 100) / 100,
+          change_pct: trendPct,
+          direction: trendPct > 5 ? 'creciente' : trendPct < -5 ? 'decreciente' : 'estable',
+        },
+      });
+    }
+
+    case 'analyze_customer_value': {
+      const days = (input.days as number) ?? 30;
+      const topN = (input.top_n as number) ?? 20;
+
+      const [customers, salesStats] = await Promise.all([
+        erp.getCustomerActivity({ days, min_purchases: 1 }),
+        erp.getSalesStats({
+          startDate: new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10),
+          endDate: new Date().toISOString().slice(0, 10),
+          summaryOnly: true,
+        }),
+      ]);
+
+      const globalMarginPct = salesStats.grossMarginPct ?? 0;
+      const result = computeCustomerProfitability(customers, globalMarginPct);
+
+      return JSON.stringify({
+        period_days: days,
+        global_gross_margin_pct: globalMarginPct,
+        total_customers: result.customers.length,
+        top_20pct_revenue_share: result.top20PctRevenueShare,
+        total_revenue: result.totalRevenueAllCustomers,
+        top_customers: result.customers.slice(0, topN).map((c) => ({
+          name: c.customerName,
+          revenue: c.totalRevenue,
+          margin: c.estimatedMargin,
+          purchases: c.purchaseCount,
+          avg_order: c.avgOrderValue,
+          tier: c.valueTier,
+        })),
+        tier_summary: {
+          high: result.customers.filter((c) => c.valueTier === 'high').length,
+          medium: result.customers.filter((c) => c.valueTier === 'medium').length,
+          low: result.customers.filter((c) => c.valueTier === 'low').length,
+        },
       });
     }
 

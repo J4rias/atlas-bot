@@ -65,6 +65,8 @@ const DIAGNOSTIC_PROMPT = `Ejecuta tu diagnóstico horario. Sigue estos pasos:
    - ¿Hay pre-órdenes pendientes que llevan mucho tiempo sin aprobar?
    - ¿Hay clientes en riesgo de pérdida? ¿Clientes próximos a recompra que se pueden contactar?
    - ¿Alguna de tus sugerencias previas necesita seguimiento?
+   - Consulta la memoria del análisis estratégico del día (read_memory subject: daily_strategy) — ¿hay algo del reporte diario que necesita seguimiento o que se ha validado/invalidado con datos nuevos?
+   - Si detectas una anomalía en ventas, verifica si coincide con un movimiento reciente de tasas (read_memory subject: rate_snapshot_latest)
 
 3. DECIDE si hay algo que valga la pena reportar.
    - Si encuentras hallazgos relevantes, empieza tu respuesta EXACTAMENTE con: RELEVANCE: YES

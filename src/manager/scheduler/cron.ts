@@ -5,6 +5,8 @@ import { runRateMonitor } from './jobs/rate-monitor.js';
 import { runStockAlert } from './jobs/stock-alert.js';
 import { runBcvRateCheck } from './jobs/bcv-rate-check.js';
 import { runCustomerActivity } from './jobs/customer-activity.js';
+import { runDailyStrategy } from './jobs/daily-strategy.js';
+import { runProductSubstitution } from './jobs/product-substitution.js';
 import { registerEventListeners } from './listeners.js';
 
 const log = createLogger('manager').child({ module: 'scheduler' });
@@ -63,6 +65,27 @@ export function startScheduler() {
       log.info('Cron: customer activity triggered');
       runCustomerActivity().catch((err) => {
         log.error({ err }, 'Cron: customer activity failed');
+      });
+    }),
+  );
+
+  // Daily strategy report — 7:05 AM Venezuela (UTC-4 → 11:05 UTC)
+  // Runs 5 min after CRM so churn data is already in memory
+  tasks.push(
+    cron.schedule('5 11 * * *', () => {
+      log.info('Cron: daily strategy triggered');
+      runDailyStrategy().catch((err) => {
+        log.error({ err }, 'Cron: daily strategy failed');
+      });
+    }),
+  );
+
+  // Product substitution analysis — Sunday 11 PM Venezuela (UTC-4 → Monday 03:00 UTC)
+  tasks.push(
+    cron.schedule('0 3 * * 1', () => {
+      log.info('Cron: product substitution triggered');
+      runProductSubstitution().catch((err) => {
+        log.error({ err }, 'Cron: product substitution failed');
       });
     }),
   );
