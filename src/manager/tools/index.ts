@@ -86,7 +86,8 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
     name: 'get_sales_stats',
     description:
       'Get detailed sales statistics: breakdown by sale type (cash/credit/mixed), by currency, by status, ' +
-      'and top products by revenue. Use this for deeper analysis when the summary is not enough.',
+      'top products by revenue, and gross profit margins. Includes totalCost, grossProfit, grossMarginPct ' +
+      'at the global level and per top product. Note: cost data is only reliable from 2026-06-17 onwards.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -113,18 +114,14 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
   {
     name: 'get_inventory_health',
     description:
-      'Get a consolidated inventory health report: products below reorder point (low stock), ' +
-      'products expiring soon, and total inventory valuation. Returns all three in a single call.',
+      'Get a consolidated inventory health report: products below reorder point (low stock) ' +
+      'and total inventory valuation. Returns both in a single call.',
     input_schema: {
       type: 'object' as const,
       properties: {
         warehouse_id: {
           type: 'number',
           description: 'Filter by warehouse ID (optional — all warehouses by default)',
-        },
-        expiring_days: {
-          type: 'number',
-          description: 'Show products expiring within this many days (default 30)',
         },
       },
       required: [],
@@ -183,6 +180,26 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
         limit: {
           type: 'number',
           description: 'Max pre-orders to return (default 20)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_customer_insights',
+    description:
+      'Get CRM insights: customers at churn risk, upcoming reorders, and new customers who never returned. ' +
+      'Use this to analyze customer retention and identify sales opportunities.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Look-back window in days (default 90)',
+        },
+        customer_id: {
+          type: 'number',
+          description: 'Get purchase history for a specific customer (optional)',
         },
       },
       required: [],
@@ -286,11 +303,9 @@ export async function executeManagerTool(
 
     case 'get_inventory_health': {
       const warehouseId = input.warehouse_id as number | undefined;
-      const expiringDays = (input.expiring_days as number) ?? 30;
 
-      const [lowStock, expiring, valuation] = await Promise.all([
+      const [lowStock, valuation] = await Promise.all([
         erp.getLowStockAlerts(warehouseId),
-        erp.getExpiringAlerts(expiringDays, warehouseId),
         erp.getInventoryValuation(warehouseId),
       ]);
 
@@ -303,19 +318,6 @@ export async function executeManagerTool(
             quantity: a.quantity,
             available: a.available_quantity,
             reorder_point: a.product?.reorder_point,
-            category: a.product?.category?.name,
-            warehouse: a.warehouse?.name,
-          })),
-        },
-        expiring: {
-          count: expiring.length,
-          days_threshold: expiringDays,
-          items: expiring.map((a) => ({
-            product: a.product?.name ?? 'Unknown',
-            sku: a.product?.sku,
-            batch: a.batch_number,
-            expiration_date: a.expiration_date,
-            quantity: a.quantity,
             category: a.product?.category?.name,
             warehouse: a.warehouse?.name,
           })),
@@ -372,6 +374,92 @@ export async function executeManagerTool(
           created_at: o.created_at,
         })),
         total: list.pagination.total,
+      });
+    }
+
+    case 'get_customer_insights': {
+      // If a specific customer is requested, return their purchase history
+      if (input.customer_id) {
+        const purchases = await erp.getCustomerPurchases(input.customer_id as number);
+        return JSON.stringify({
+          customer_id: input.customer_id,
+          purchases: purchases.map((p) => ({
+            date: p.date,
+            total_usd: p.total_usd,
+            payment_type: p.payment_type,
+            items: p.items.map((i) => ({
+              product: i.product_name,
+              quantity: i.quantity,
+              total: i.total,
+            })),
+          })),
+          total_purchases: purchases.length,
+        });
+      }
+
+      // Otherwise, return aggregated activity with analysis
+      const days = (input.days as number) ?? 90;
+      const customers = await erp.getCustomerActivity({ days, min_purchases: 1 });
+
+      const today = new Date();
+      const churnRisk: Array<Record<string, unknown>> = [];
+      const reorderDue: Array<Record<string, unknown>> = [];
+      const newInactive: Array<Record<string, unknown>> = [];
+      const healthy: Array<Record<string, unknown>> = [];
+
+      for (const c of customers) {
+        const daysSinceLast = Math.floor(
+          (today.getTime() - new Date(c.last_purchase).getTime()) / 86_400_000,
+        );
+
+        if (
+          c.total_purchases >= 2 &&
+          c.avg_days_between_purchases > 0 &&
+          daysSinceLast > c.avg_days_between_purchases * 1.5
+        ) {
+          churnRisk.push({
+            name: c.customer_name,
+            phone: c.customer_phone,
+            avg_cycle: Math.round(c.avg_days_between_purchases),
+            days_since_last: daysSinceLast,
+            total_spent: c.total_spent_usd,
+            purchases: c.total_purchases,
+          });
+        } else if (
+          c.total_purchases >= 2 &&
+          c.avg_days_between_purchases > 0 &&
+          daysSinceLast >= c.avg_days_between_purchases - 2
+        ) {
+          reorderDue.push({
+            name: c.customer_name,
+            phone: c.customer_phone,
+            avg_cycle: Math.round(c.avg_days_between_purchases),
+            days_since_last: daysSinceLast,
+          });
+        } else if (c.total_purchases === 1 && daysSinceLast >= 14) {
+          newInactive.push({
+            name: c.customer_name,
+            phone: c.customer_phone,
+            days_since: daysSinceLast,
+            spent: c.total_spent_usd,
+          });
+        } else {
+          healthy.push({
+            name: c.customer_name,
+            purchases: c.total_purchases,
+            avg_cycle: Math.round(c.avg_days_between_purchases),
+            total_spent: c.total_spent_usd,
+          });
+        }
+      }
+
+      return JSON.stringify({
+        period_days: days,
+        total_customers: customers.length,
+        churn_risk: { count: churnRisk.length, customers: churnRisk },
+        reorder_due: { count: reorderDue.length, customers: reorderDue },
+        new_inactive: { count: newInactive.length, customers: newInactive },
+        healthy: { count: healthy.length },
       });
     }
 

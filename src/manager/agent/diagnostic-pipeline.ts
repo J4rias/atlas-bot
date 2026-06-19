@@ -52,17 +52,18 @@ const DIAGNOSTIC_PROMPT = `Ejecuta tu diagnóstico horario. Sigue estos pasos:
 
 1. RECOLECTA datos usando tus herramientas:
    - Consulta el resumen de ventas del día (get_sales_summary)
-   - Consulta la salud del inventario (get_inventory_health) — stock bajo, productos por vencer, valuación
+   - Consulta la salud del inventario (get_inventory_health) — stock bajo, valuación
    - Consulta las tasas de cambio actuales (get_exchange_rates) y el historial reciente (get_rate_history) para detectar tendencias
    - Consulta el pipeline de pre-órdenes (get_preorder_pipeline) — cuántas pendientes, aprobadas, de hoy
+   - Consulta los insights de clientes (get_customer_insights) — churn, recompras, nuevos inactivos
    - Consulta tu memoria para comparar con observaciones previas (read_memory)
 
 2. ANALIZA:
    - ¿Cómo van las ventas del día? ¿Por encima o debajo de lo esperado?
    - ¿Hay productos con stock críticamente bajo que se están vendiendo bien?
-   - ¿Hay productos por vencer que necesitan promoción urgente?
    - ¿Las tasas de cambio muestran una tendencia clara? ¿Impacta los márgenes?
    - ¿Hay pre-órdenes pendientes que llevan mucho tiempo sin aprobar?
+   - ¿Hay clientes en riesgo de pérdida? ¿Clientes próximos a recompra que se pueden contactar?
    - ¿Alguna de tus sugerencias previas necesita seguimiento?
 
 3. DECIDE si hay algo que valga la pena reportar.

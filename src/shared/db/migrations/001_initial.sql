@@ -54,7 +54,7 @@ CREATE TABLE agent_memory (
 CREATE INDEX idx_agent_memory_category ON agent_memory(category);
 CREATE INDEX idx_agent_memory_subject ON agent_memory(subject);
 CREATE INDEX idx_agent_memory_active ON agent_memory(category, subject)
-    WHERE superseded_by IS NULL AND (valid_until IS NULL OR valid_until > NOW());
+    WHERE superseded_by IS NULL;
 
 -- =========================================================
 -- Agent self-metrics (auto-measurement)

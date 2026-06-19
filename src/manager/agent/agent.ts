@@ -1,5 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { getAnthropicClient, MODEL_SONNET } from '../../shared/ai/client.js';
+import type Anthropic from '@anthropic-ai/sdk';
+import type OpenAI from 'openai';
+import { getOpenAIClient, MODEL_GPT4O } from '../../shared/ai/client.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
@@ -16,15 +17,36 @@ interface AgentOptions {
   maxTokens?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Convert Anthropic tool definitions to OpenAI format
+// ---------------------------------------------------------------------------
+
+function toOpenAITools(anthropicTools: Anthropic.Tool[]): OpenAI.ChatCompletionTool[] {
+  return anthropicTools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description ?? '',
+      parameters: t.input_schema as Record<string, unknown>,
+    },
+  }));
+}
+
+const openaiTools = toOpenAITools(allManagerTools);
+
+// ---------------------------------------------------------------------------
+// Agent: OpenAI GPT-4o with tool-use loop
+// ---------------------------------------------------------------------------
+
 /**
  * Run the Manager agent with a given prompt.
- * Returns the final text response from Claude.
+ * Returns the final text response from GPT-4o.
  */
 export async function runManagerAgent(
   userPrompt: string,
   options: AgentOptions = {},
 ): Promise<string> {
-  const client = getAnthropicClient();
+  const client = getOpenAIClient();
 
   // Load recent memories as context
   let memoryContext: string | undefined;
@@ -36,7 +58,6 @@ export async function runManagerAgent(
         .join('\n');
     }
   } catch {
-    // DB not available — proceed without memory
     log.debug('Memory not available, proceeding without context');
   }
 
@@ -45,68 +66,70 @@ export async function runManagerAgent(
     ? `${options.preamble}\n\n${userPrompt}`
     : userPrompt;
 
-  const messages: Anthropic.MessageParam[] = [
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: fullUserMessage },
   ];
 
   let toolRounds = 0;
 
   while (toolRounds < MAX_TOOL_ROUNDS) {
-    const response = await client.messages.create({
-      model: MODEL_SONNET,
+    const response = await client.chat.completions.create({
+      model: MODEL_GPT4O,
       max_tokens: options.maxTokens ?? 2048,
-      system: systemPrompt,
-      tools: allManagerTools,
+      tools: openaiTools,
       messages,
     });
 
-    if (response.stop_reason === 'tool_use') {
+    const choice = response.choices[0];
+    const assistantMessage = choice.message;
+
+    if (choice.finish_reason === 'tool_calls' && assistantMessage.tool_calls?.length) {
       toolRounds++;
+      messages.push(assistantMessage);
 
-      const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ContentBlockParam & { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } =>
-          b.type === 'tool_use',
-      );
-
-      messages.push({ role: 'assistant', content: response.content });
-
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const toolUse of toolUseBlocks) {
-        log.debug({ tool: toolUse.name, input: toolUse.input }, 'Tool call');
+      for (const toolCall of assistantMessage.tool_calls) {
+        if (toolCall.type !== 'function') continue;
+        const toolName = toolCall.function.name;
+        let toolInput: Record<string, unknown> = {};
         try {
-          const result = await executeManagerTool(toolUse.name, toolUse.input);
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: toolUse.id,
-            content: result,
-          });
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log.error({ tool: toolUse.name, err: msg }, 'Tool execution failed');
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: toolUse.id,
-            content: `Error: ${msg}`,
-            is_error: true,
-          });
+          toolInput = JSON.parse(toolCall.function.arguments || '{}');
+        } catch {
+          log.warn({ tool: toolName }, 'Failed to parse tool arguments');
         }
+
+        log.debug({ tool: toolName, input: toolInput }, 'Tool call');
+
+        let result: string;
+        try {
+          result = await executeManagerTool(toolName, toolInput);
+        } catch (err: unknown) {
+          const errObj = err as Record<string, unknown>;
+          const msg = err instanceof Error
+            ? err.message || errObj.code || errObj.status || 'Unknown error'
+            : String(err);
+          log.error({ tool: toolName, err: msg, code: errObj?.code, status: errObj?.status }, 'Tool execution failed');
+          result = `Error: ${msg}`;
+        }
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: result,
+        });
       }
 
-      messages.push({ role: 'user', content: toolResults });
       continue;
     }
 
     // Final text response
-    const textBlocks = response.content.filter(
-      (b): b is Anthropic.TextBlock => b.type === 'text',
-    );
-    const fullText = textBlocks.map((b) => b.text).join('\n');
+    const fullText = assistantMessage.content ?? '';
 
     log.info(
       {
         toolRounds,
-        tokensIn: response.usage.input_tokens,
-        tokensOut: response.usage.output_tokens,
+        tokensIn: response.usage?.prompt_tokens,
+        tokensOut: response.usage?.completion_tokens,
       },
       'Manager agent response',
     );

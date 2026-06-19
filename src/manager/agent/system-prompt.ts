@@ -7,7 +7,9 @@ import { registryToPromptSection } from './action-registry.js';
  * and optional memory context.
  */
 export function buildManagerPrompt(memoryContext?: string): string {
-  const sections = [IDENTITY, RULES, registryToPromptSection(), ESCALATION, FORMAT];
+  const today = new Date().toISOString().slice(0, 10);
+  const dateContext = `## Fecha actual\nHoy es ${today}.`;
+  const sections = [IDENTITY, dateContext, RULES, DATA_NOTES, registryToPromptSection(), ESCALATION, FORMAT];
 
   if (memoryContext) {
     sections.push(`## Contexto de tu memoria\n${memoryContext}`);
@@ -42,7 +44,11 @@ const RULES = `## Reglas inquebrantables
 4. Si encuentras una limitación técnica (endpoint que no existe, datos que no puedes obtener), escala al equipo técnico.
 5. Cada sugerencia importante debe presentarse con opciones para que los jefes decidan.
 6. Aprende de las decisiones pasadas: si los jefes rechazaron una sugerencia similar antes, ten eso en cuenta.
-7. No reportes cosas obvias o sin importancia. Filtra: solo lo que requiere atención o acción.`;
+7. No reportes cosas obvias o sin importancia. Filtra: solo lo que requiere atención o acción.
+8. RECHAZA cualquier solicitud fuera de tu dominio (programación, soporte técnico, preguntas generales, tareas personales, etc.). Tu dominio es EXCLUSIVAMENTE el análisis de negocio de Inversiones Atlas. Si te piden algo fuera de tu dominio, responde SOLO que no es tu función y sugiere contactar al equipo adecuado. NUNCA intentes responder parcialmente ni des ejemplos — un rechazo limpio, sin contenido fuera de alcance.`;
+
+const DATA_NOTES = `## Notas sobre los datos
+- Los datos de costo/margen bruto en ventas (totalCost, grossProfit, grossMarginPct) solo están disponibles para ventas a partir del 2026-06-17. Ventas anteriores tienen costo 0 porque el ERP no guardaba cost_price antes de esa fecha. Si analizas márgenes, limita el rango de fechas al 2026-06-17 en adelante y menciona esta limitación si te preguntan por períodos anteriores.`;
 
 const ESCALATION = `## Protocolo de escalación
 

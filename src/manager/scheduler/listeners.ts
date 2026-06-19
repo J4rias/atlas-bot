@@ -29,20 +29,118 @@ export function registerEventListeners() {
     });
   });
 
-  eventBus.on('stock:critical-low', (data: {
+  eventBus.on('stock:critical-low-batch', (products: {
     productId: number;
     productName: string;
     currentStock: number;
-    averageSales: number;
-  }) => {
+  }[]) => {
+    const lines = products.map((p) => `  • ${p.productName}: *${p.currentStock} uds*`);
     const message =
       `*ALERTA DE STOCK*\n\n` +
-      `*${data.productName}* tiene stock crítico: *${data.currentStock} unidades*\n\n` +
+      `${products.length} producto(s) con stock crítico:\n\n` +
+      `${lines.join('\n')}\n\n` +
       `Considere hacer pedido de reposición.`;
 
-    log.info({ productId: data.productId, stock: data.currentStock }, 'Sending stock alert');
+    log.info({ count: products.length }, 'Sending consolidated stock alert');
     notifyBosses(message).catch((err) => {
       log.error({ err }, 'Failed to send stock alert');
+    });
+  });
+
+  eventBus.on('rate:bcv-discrepancy', (data: {
+    erpRate: number;
+    bcvRate: number;
+    bcvEurRate: number | null;
+    discrepancyPct: number;
+  }) => {
+    const direction = data.erpRate > data.bcvRate ? 'por encima' : 'por debajo';
+    const lines = [
+      `*ALERTA: Discrepancia con BCV*\n`,
+      `La tasa Atlas está ${direction} de la tasa BCV por *${data.discrepancyPct}%*\n`,
+      `  Tasa Atlas (ERP): *${data.erpRate.toFixed(2)} Bs/$*`,
+      `  Tasa BCV oficial: *${data.bcvRate.toFixed(2)} Bs/$*`,
+    ];
+    if (data.bcvEurRate) {
+      lines.push(`  Tasa BCV EUR: *${data.bcvEurRate.toFixed(2)} Bs/€*`);
+    }
+    lines.push(`\nRevise si es necesario actualizar la tasa en el ERP.`);
+
+    const message = lines.join('\n');
+    log.info({ discrepancyPct: data.discrepancyPct }, 'Sending BCV discrepancy alert');
+    notifyBosses(message).catch((err) => {
+      log.error({ err }, 'Failed to send BCV discrepancy alert');
+    });
+  });
+
+  // --- CRM events ---
+
+  eventBus.on('crm:churn-risk', (customers: {
+    customer_name: string;
+    customer_phone: string | null;
+    avg_days_between_purchases: number;
+    days_since_last_purchase: number;
+    total_spent_usd: number;
+    total_purchases: number;
+  }[]) => {
+    const lines = customers.map((c) => {
+      const phone = c.customer_phone ? ` (${c.customer_phone})` : '';
+      return `  • *${c.customer_name}*${phone}\n` +
+        `    Compraba cada ~${Math.round(c.avg_days_between_purchases)} días, lleva *${c.days_since_last_purchase} días* sin comprar\n` +
+        `    ${c.total_purchases} compras, $${c.total_spent_usd.toFixed(0)} acumulado`;
+    });
+    const message =
+      `*⚠️ CLIENTES EN RIESGO DE PÉRDIDA*\n\n` +
+      `${customers.length} cliente(s) con patrón de compra interrumpido:\n\n` +
+      `${lines.join('\n\n')}\n\n` +
+      `Acción sugerida: contactar para retener.`;
+
+    log.info({ count: customers.length }, 'Sending churn risk alert');
+    notifyBosses(message).catch((err) => {
+      log.error({ err }, 'Failed to send churn risk alert');
+    });
+  });
+
+  eventBus.on('crm:reorder-due', (customers: {
+    customer_name: string;
+    customer_phone: string | null;
+    avg_days_between_purchases: number;
+    days_since_last_purchase: number;
+  }[]) => {
+    const lines = customers.map((c) => {
+      const phone = c.customer_phone ? ` (${c.customer_phone})` : '';
+      return `  • *${c.customer_name}*${phone} — compra cada ~${Math.round(c.avg_days_between_purchases)} días (día ${c.days_since_last_purchase})`;
+    });
+    const message =
+      `*🔄 RECOMPRAS ESPERADAS*\n\n` +
+      `${customers.length} cliente(s) próximos a su ciclo de compra:\n\n` +
+      `${lines.join('\n')}\n\n` +
+      `Oportunidad de contacto proactivo.`;
+
+    log.info({ count: customers.length }, 'Sending reorder-due alert');
+    notifyBosses(message).catch((err) => {
+      log.error({ err }, 'Failed to send reorder-due alert');
+    });
+  });
+
+  eventBus.on('crm:new-inactive', (customers: {
+    customer_name: string;
+    customer_phone: string | null;
+    days_since_purchase: number;
+    total_spent_usd: number;
+  }[]) => {
+    const lines = customers.map((c) => {
+      const phone = c.customer_phone ? ` (${c.customer_phone})` : '';
+      return `  • *${c.customer_name}*${phone} — compró hace ${c.days_since_purchase} días ($${c.total_spent_usd.toFixed(0)})`;
+    });
+    const message =
+      `*🆕 CLIENTES NUEVOS SIN RETORNO*\n\n` +
+      `${customers.length} cliente(s) que compraron 1 vez y no han vuelto:\n\n` +
+      `${lines.join('\n')}\n\n` +
+      `Puede ser oportunidad perdida si no se contacta.`;
+
+    log.info({ count: customers.length }, 'Sending new-inactive alert');
+    notifyBosses(message).catch((err) => {
+      log.error({ err }, 'Failed to send new-inactive alert');
     });
   });
 

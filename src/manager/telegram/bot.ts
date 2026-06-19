@@ -27,7 +27,7 @@ export function createBot(): Bot<BotContext> {
 
   // Error handler
   bot.catch((err) => {
-    log.error({ err: err.message }, 'Bot error');
+    log.error({ err: err.error ?? err.message, stack: err.stack }, 'Bot error');
   });
 
   return bot;

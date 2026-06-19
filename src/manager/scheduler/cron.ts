@@ -3,6 +3,8 @@ import { createLogger } from '../../shared/logger.js';
 import { runHourlyDiagnostic } from '../agent/diagnostic-pipeline.js';
 import { runRateMonitor } from './jobs/rate-monitor.js';
 import { runStockAlert } from './jobs/stock-alert.js';
+import { runBcvRateCheck } from './jobs/bcv-rate-check.js';
+import { runCustomerActivity } from './jobs/customer-activity.js';
 import { registerEventListeners } from './listeners.js';
 
 const log = createLogger('manager').child({ module: 'scheduler' });
@@ -35,12 +37,32 @@ export function startScheduler() {
     }),
   );
 
-  // Stock alert — every 30 minutes
+  // Stock alert — every 60 minutes
   tasks.push(
-    cron.schedule('*/30 * * * *', () => {
+    cron.schedule('0 * * * *', () => {
       log.info('Cron: stock alert triggered');
       runStockAlert().catch((err) => {
         log.error({ err }, 'Cron: stock alert failed');
+      });
+    }),
+  );
+
+  // BCV rate check — 8 AM, 12 PM, 3 PM Venezuela time (UTC-4 → 12, 16, 19 UTC)
+  tasks.push(
+    cron.schedule('0 12,16,19 * * *', () => {
+      log.info('Cron: BCV rate check triggered');
+      runBcvRateCheck().catch((err) => {
+        log.error({ err }, 'Cron: BCV rate check failed');
+      });
+    }),
+  );
+
+  // Customer activity (CRM) — daily at 7 AM Venezuela (UTC-4 → 11:00 UTC)
+  tasks.push(
+    cron.schedule('0 11 * * *', () => {
+      log.info('Cron: customer activity triggered');
+      runCustomerActivity().catch((err) => {
+        log.error({ err }, 'Cron: customer activity failed');
       });
     }),
   );

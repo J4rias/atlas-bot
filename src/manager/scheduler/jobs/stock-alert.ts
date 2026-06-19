@@ -40,15 +40,10 @@ export async function runStockAlert() {
       }
     }
 
-    // Emit alerts
-    for (const cp of criticalProducts) {
-      log.warn(cp, 'Critical low stock detected');
-      eventBus.emit('stock:critical-low', {
-        productId: cp.productId,
-        productName: cp.productName,
-        currentStock: cp.currentStock,
-        averageSales: 0, // TODO: calculate from sales history when endpoint exists
-      });
+    // Emit single consolidated alert
+    if (criticalProducts.length > 0) {
+      log.warn({ count: criticalProducts.length }, 'Critical low stock detected');
+      eventBus.emit('stock:critical-low-batch', criticalProducts);
     }
 
     // Save observation to memory if there are critical products

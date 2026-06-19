@@ -85,12 +85,17 @@ export interface SalesStats {
   totalSales: number;
   totalRevenue: number;
   totalRevenueCOP: number;
+  totalCost?: number;
+  grossProfit?: number;
+  grossMarginPct?: number;
   salesByType?: Array<{ sale_type: string; count: number; total: number }>;
   salesByStatus?: Array<{ status: string; count: number; total: number }>;
   topProducts?: Array<{
     product_id: number;
     total_quantity: number;
     total_amount: number;
+    total_cost?: number;
+    gross_margin_pct?: number;
     product?: { id: number; name: string; sku: string };
   }>;
   salesByCurrency?: Record<string, { count: number; total: number }>;
@@ -130,19 +135,6 @@ export interface LowStockAlert {
     name: string;
     sku: string;
     reorder_point: number;
-    category?: { id: number; name: string };
-  };
-  warehouse?: { id: number; name: string };
-}
-
-export interface ExpiringAlert {
-  batch_number: string;
-  expiration_date: string;
-  quantity: number;
-  product?: {
-    id: number;
-    name: string;
-    sku: string;
     category?: { id: number; name: string };
   };
   warehouse?: { id: number; name: string };
@@ -210,6 +202,38 @@ export interface PreOrderStats {
   pending: number;
   approved: number;
   today: number;
+}
+
+// ---------------------------------------------------------------------------
+// CRM / Customer activity
+// ---------------------------------------------------------------------------
+
+export interface CustomerPurchaseItem {
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+}
+
+export interface CustomerPurchase {
+  sale_id: number;
+  date: string;
+  total_usd: number;
+  total_cop: number;
+  payment_type: string;
+  items: CustomerPurchaseItem[];
+}
+
+export interface CustomerActivity {
+  customer_id: number;
+  customer_name: string;
+  customer_phone: string | null;
+  total_purchases: number;
+  total_spent_usd: number;
+  first_purchase: string;
+  last_purchase: string;
+  avg_days_between_purchases: number;
 }
 
 export interface CreatePreOrderInput {

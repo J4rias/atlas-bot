@@ -31,6 +31,10 @@ export const config = {
     apiKey: envOptional('ANTHROPIC_API_KEY'),
   },
 
+  openai: {
+    apiKey: envOptional('OPENAI_API_KEY'),
+  },
+
   // Mode 1: Consultant (Messenger)
   meta: {
     verifyToken: envOptional('META_VERIFY_TOKEN'),
@@ -48,8 +52,8 @@ export const config = {
 export function validateMode(mode: 'consultant' | 'manager'): void {
   const missing: string[] = [];
 
-  // Both modes need these
-  if (!config.anthropic.apiKey) missing.push('ANTHROPIC_API_KEY');
+  // Both modes need at least one AI provider
+  if (!config.anthropic.apiKey && !config.openai.apiKey) missing.push('ANTHROPIC_API_KEY or OPENAI_API_KEY');
   if (!config.db.url) missing.push('DATABASE_URL');
 
   if (mode === 'consultant') {

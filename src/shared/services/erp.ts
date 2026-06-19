@@ -11,12 +11,13 @@ import type {
   DailyClosure,
   ProductSalesItem,
   LowStockAlert,
-  ExpiringAlert,
   InventoryValuation,
   ExchangeRateHistoryItem,
   PreOrder,
   PreOrderStats,
   CreatePreOrderInput,
+  CustomerPurchase,
+  CustomerActivity,
 } from '../types/index.js';
 
 // Re-export types so consumers can import from services/erp
@@ -28,12 +29,13 @@ export type {
   DailyClosure,
   ProductSalesItem,
   LowStockAlert,
-  ExpiringAlert,
   InventoryValuation,
   ExchangeRateHistoryItem,
   PreOrder,
   PreOrderStats,
   CreatePreOrderInput,
+  CustomerPurchase,
+  CustomerActivity,
 } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ const client: AxiosInstance = axios.create({
 // Attach auth header if token is configured
 client.interceptors.request.use((req) => {
   if (config.erp.token) {
-    req.headers.Authorization = `Bearer ${config.erp.token}`;
+    req.headers['X-API-Key'] = config.erp.token;
   }
   return req;
 });
@@ -250,18 +252,6 @@ export async function getLowStockAlerts(
   return res.data;
 }
 
-/** Products expiring within N days. */
-export async function getExpiringAlerts(
-  days = 30,
-  warehouseId?: number,
-): Promise<ExpiringAlert[]> {
-  const params: Record<string, number> = { days };
-  if (warehouseId) params.warehouse_id = warehouseId;
-
-  const { data: res } = await client.get('/api/inventory/alerts/expiring', { params });
-  return res.data;
-}
-
 /** Inventory valuation across warehouses. */
 export async function getInventoryValuation(
   warehouseId?: number,
@@ -328,5 +318,35 @@ export async function createPreOrder(
   input: CreatePreOrderInput,
 ): Promise<PreOrder> {
   const { data: res } = await client.post('/api/pre-orders', input);
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// CRM / Customer activity
+// ---------------------------------------------------------------------------
+
+/** Purchase history for a specific customer. */
+export async function getCustomerPurchases(
+  customerId: number,
+  opts?: { from?: string; to?: string },
+): Promise<CustomerPurchase[]> {
+  const params: Record<string, string> = {};
+  if (opts?.from) params.from = opts.from;
+  if (opts?.to) params.to = opts.to;
+
+  const { data: res } = await client.get(`/api/customers/${customerId}/purchases`, { params });
+  return res.data;
+}
+
+/** Aggregated customer activity — purchase frequency, recency, spend. */
+export async function getCustomerActivity(opts?: {
+  days?: number;
+  min_purchases?: number;
+}): Promise<CustomerActivity[]> {
+  const params: Record<string, number> = {};
+  if (opts?.days) params.days = opts.days;
+  if (opts?.min_purchases) params.min_purchases = opts.min_purchases;
+
+  const { data: res } = await client.get('/api/customers/activity', { params });
   return res.data;
 }
