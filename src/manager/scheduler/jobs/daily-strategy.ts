@@ -58,6 +58,12 @@ const DAILY_STRATEGY_PROMPT = `Genera tu reporte estratégico diario. Ejecuta TO
    - Lee la memoria de sustitución de productos (read_memory subject: product_substitution).
    - ¿Hay algún producto estrella sin stock cuyo sustituto se está vendiendo?
 
+6. RECOMENDACIÓN COMERCIAL (Go-to-Market):
+   - Con base en los 5 análisis anteriores, aplica las estrategias comerciales de tu prompt.
+   - Selecciona 1-2 estrategias que apliquen HOY según los datos reales (no fuerces una si no hay señal).
+   - Prioridad: reactivar clientes dormidos de alto valor > mover inventario lento > oportunidad de volumen.
+   - Si hay una fecha comercial importante próxima (ver calendario estacional), menciónala.
+
 FORMATO DEL REPORTE:
 - Resumen ejecutivo (2-3 líneas máximo)
 - Hallazgos clave con números (lista con bullet points)

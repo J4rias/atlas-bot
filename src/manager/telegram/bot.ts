@@ -2,6 +2,7 @@ import { Bot, session } from 'grammy';
 import { config } from '../../shared/config/index.js';
 import { createLogger } from '../../shared/logger.js';
 import { authMiddleware } from './middleware.js';
+import { whoamiCommand } from './commands/whoami.js';
 import type { BotContext, SessionData } from './types.js';
 
 const log = createLogger('manager').child({ module: 'bot' });
@@ -21,6 +22,9 @@ export function createBot(): Bot<BotContext> {
       initial: () => ({}),
     }),
   );
+
+  // /whoami is public — anyone can check their ID (registered before auth)
+  bot.command('whoami', whoamiCommand);
 
   // Auth: only authorized recipients can interact
   bot.use(authMiddleware);
