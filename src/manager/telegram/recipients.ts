@@ -25,7 +25,33 @@ export async function getRecipients(): Promise<Recipient[]> {
   //   cachedRecipients = data;
   // }
 
-  // Fallback: parse from env var
+  // Fallback: parse from env vars
+  // Simple format: MANAGER_BOSS_CHATS=-5251715600,1141337487
+  //                MANAGER_TECH_CHATS=1141337487
+  // Legacy JSON format: MANAGER_RECIPIENTS=[{...}]
+  const bossChats = process.env.MANAGER_BOSS_CHATS;
+  const techChats = process.env.MANAGER_TECH_CHATS;
+
+  if (bossChats || techChats) {
+    const parsed: Recipient[] = [];
+    if (bossChats) {
+      for (const id of bossChats.split(',')) {
+        const chatId = id.trim();
+        if (chatId) parsed.push({ chatId, name: `boss_${chatId}`, role: 'boss', active: true });
+      }
+    }
+    if (techChats) {
+      for (const id of techChats.split(',')) {
+        const chatId = id.trim();
+        if (chatId) parsed.push({ chatId, name: `tech_${chatId}`, role: 'tech', active: true });
+      }
+    }
+    cachedRecipients = parsed;
+    cacheExpiry = Date.now() + CACHE_TTL;
+    return cachedRecipients;
+  }
+
+  // Legacy JSON format
   const raw = process.env.MANAGER_RECIPIENTS;
   if (raw) {
     try {
