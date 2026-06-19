@@ -168,7 +168,9 @@ Formato: Qué intentaste → Qué falló → Qué necesitas → Prioridad estima
 - Confianza < 50%: escala directamente, no des la respuesta`;
 
 const FORMAT = `## Formato de respuestas
-- Usa Telegram Markdown (negrita con *texto*, code con \`texto\`)
+- NUNCA uses markdown: nada de **, ##, ###, *, \`, ni ningún otro marcador de formato.
+- Escribe en texto plano limpio. Para énfasis usa MAYÚSCULAS o → flechas.
+- Usa viñetas con guiones (-) o números para listas.
 - Sé conciso pero completo. Máximo 3-5 párrafos por reporte.
 - Incluye números y datos concretos siempre que sea posible.
 - Para reportes diagnósticos usa estructura:

@@ -36,12 +36,12 @@ export function registerEventListeners() {
     )
       .then((analysis) => {
         const fullMessage = `${alertMessage}\n\n*Análisis de impacto:*\n${analysis}`;
-        return notifyBosses(fullMessage);
+        return notifyBosses(fullMessage, 'Markdown');
       })
       .catch((err) => {
         // If analysis fails, still send the basic alert
         log.error({ err }, 'Rate impact analysis failed — sending basic alert');
-        notifyBosses(`${alertMessage}\n\nRevise si es necesario ajustar precios o congelar cotizaciones.`).catch(
+        notifyBosses(`${alertMessage}\n\nRevise si es necesario ajustar precios o congelar cotizaciones.`, 'Markdown').catch(
           (e) => log.error({ err: e }, 'Failed to send rate alert'),
         );
       });
@@ -60,7 +60,7 @@ export function registerEventListeners() {
       `Considere hacer pedido de reposición.`;
 
     log.info({ count: products.length }, 'Sending consolidated stock alert');
-    notifyBosses(message).catch((err) => {
+    notifyBosses(message, 'Markdown').catch((err) => {
       log.error({ err }, 'Failed to send stock alert');
     });
   });
@@ -85,7 +85,7 @@ export function registerEventListeners() {
 
     const message = lines.join('\n');
     log.info({ discrepancyPct: data.discrepancyPct }, 'Sending BCV discrepancy alert');
-    notifyBosses(message).catch((err) => {
+    notifyBosses(message, 'Markdown').catch((err) => {
       log.error({ err }, 'Failed to send BCV discrepancy alert');
     });
   });
@@ -113,7 +113,7 @@ export function registerEventListeners() {
       `Acción sugerida: contactar para retener.`;
 
     log.info({ count: customers.length }, 'Sending churn risk alert');
-    notifyBosses(message).catch((err) => {
+    notifyBosses(message, 'Markdown').catch((err) => {
       log.error({ err }, 'Failed to send churn risk alert');
     });
   });
@@ -135,7 +135,7 @@ export function registerEventListeners() {
       `Oportunidad de contacto proactivo.`;
 
     log.info({ count: customers.length }, 'Sending reorder-due alert');
-    notifyBosses(message).catch((err) => {
+    notifyBosses(message, 'Markdown').catch((err) => {
       log.error({ err }, 'Failed to send reorder-due alert');
     });
   });
@@ -157,7 +157,7 @@ export function registerEventListeners() {
       `Puede ser oportunidad perdida si no se contacta.`;
 
     log.info({ count: customers.length }, 'Sending new-inactive alert');
-    notifyBosses(message).catch((err) => {
+    notifyBosses(message, 'Markdown').catch((err) => {
       log.error({ err }, 'Failed to send new-inactive alert');
     });
   });

@@ -1,6 +1,7 @@
 import type { BotContext } from '../types.js';
 import { runManagerAgent } from '../../agent/agent.js';
 import { createLogger } from '../../../shared/logger.js';
+import { getThinkingMessage } from '../thinking.js';
 
 const log = createLogger('manager').child({ command: 'ask' });
 
@@ -16,7 +17,7 @@ export async function askCommand(ctx: BotContext) {
     return;
   }
 
-  await ctx.reply('Analizando...');
+  await ctx.reply(getThinkingMessage());
 
   try {
     const response = await runManagerAgent(question, {
@@ -42,7 +43,7 @@ export async function freeformHandler(ctx: BotContext) {
   const question = ctx.message?.text?.trim();
   if (!question) return;
 
-  await ctx.reply('Analizando...');
+  await ctx.reply(getThinkingMessage());
 
   try {
     const response = await runManagerAgent(question, {

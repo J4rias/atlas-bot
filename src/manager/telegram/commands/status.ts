@@ -1,11 +1,12 @@
 import type { BotContext } from '../types.js';
 import { runManagerAgent } from '../../agent/agent.js';
 import { createLogger } from '../../../shared/logger.js';
+import { getThinkingMessage } from '../thinking.js';
 
 const log = createLogger('manager').child({ command: 'status' });
 
 export async function statusCommand(ctx: BotContext) {
-  await ctx.reply('Consultando estado del negocio...');
+  await ctx.reply(getThinkingMessage());
 
   try {
     const response = await runManagerAgent(
@@ -18,7 +19,7 @@ export async function statusCommand(ctx: BotContext) {
       },
     );
 
-    await ctx.reply(response, { parse_mode: 'Markdown' });
+    await ctx.reply(response);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, 'Status command failed');

@@ -22,7 +22,7 @@ export async function runDailyStrategy(): Promise<void> {
 
     // The daily strategy always sends (unlike hourly diagnostic which filters)
     log.info('Daily strategy report generated — sending to bosses');
-    await notifyBosses(`*📊 Reporte Estratégico Diario*\n\n${response}`);
+    await notifyBosses(`REPORTE ESTRATEGICO DIARIO\n\n${response}`);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, 'Daily strategy report failed');
@@ -32,6 +32,7 @@ export async function runDailyStrategy(): Promise<void> {
       `Qué intenté: Reporte estratégico diario\n` +
       `Qué falló: ${msg}\n` +
       `Prioridad: ALTA — los jefes esperan este reporte cada mañana`,
+      'Markdown',
     );
   }
 }
