@@ -28,3 +28,4 @@ export function getOpenAIClient(): OpenAI {
 export const MODEL_SONNET = 'claude-sonnet-4-6-20250514';
 export const MODEL_HAIKU = 'claude-haiku-4-5-20251001';
 export const MODEL_GPT4O = 'gpt-4o';
+export const MODEL_GPT4O_MINI = 'gpt-4o-mini';

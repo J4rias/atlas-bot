@@ -2,6 +2,7 @@ import { eventBus } from './triggers/event-bus.js';
 import { notifyBosses } from '../telegram/notifications.js';
 import { createLogger } from '../../shared/logger.js';
 import { runManagerAgent } from '../agent/agent.js';
+import { MODEL_GPT4O } from '../../shared/ai/client.js';
 
 const log = createLogger('manager').child({ module: 'listeners' });
 
@@ -32,7 +33,7 @@ export function registerEventListeners() {
       `Usa analyze_rate_sales_impact para analizar los últimos 7 días y dime: ` +
       `¿cómo impacta este cambio en las ventas basado en el patrón histórico? ` +
       `Sé breve (máximo 3-4 líneas). Incluye el coeficiente de correlación y la cuantificación.`,
-      { preamble: 'Análisis reactivo por cambio significativo de tasa.', maxTokens: 1024 },
+      { preamble: 'Análisis reactivo por cambio significativo de tasa.', maxTokens: 1024, model: MODEL_GPT4O },
     )
       .then((analysis) => {
         const fullMessage = `${alertMessage}\n\n*Análisis de impacto:*\n${analysis}`;

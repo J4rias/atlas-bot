@@ -336,14 +336,32 @@ export async function executeManagerTool(
       const confidence = (input.confidence as number) ?? 0.8;
 
       try {
-        const saved = await memoryRepo.saveMemory({
-          category,
-          subject,
-          content,
-          confidence,
-          source: 'diagnostic',
-        });
-        return JSON.stringify({ result: 'Memory saved.', id: saved.id });
+        // Check if a memory with this subject already exists — supersede instead of duplicating
+        const existing = await memoryRepo.findMemories(undefined, subject, 1);
+        const exactMatch = existing.find((m) => m.subject === subject);
+
+        let saved;
+        if (exactMatch) {
+          saved = await memoryRepo.supersedeMemory(exactMatch.id, {
+            category,
+            subject,
+            content,
+            confidence,
+            source: 'diagnostic',
+          });
+        } else {
+          saved = await memoryRepo.saveMemory({
+            category,
+            subject,
+            content,
+            confidence,
+            source: 'diagnostic',
+          });
+        }
+        // Generate embedding for semantic search (non-blocking — don't fail the save)
+        memoryRepo.saveMemoryEmbedding(saved.id, category, subject, content).catch(() => {});
+
+        return JSON.stringify({ result: exactMatch ? 'Memory updated (superseded previous).' : 'Memory saved.', id: saved.id });
       } catch {
         return JSON.stringify({ error: 'Database not available — memory write failed.' });
       }

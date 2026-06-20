@@ -1,4 +1,8 @@
 import { query } from '../client.js';
+import { generateEmbedding, memoryToEmbeddingText } from '../../ai/embeddings.js';
+import { createLogger } from '../../logger.js';
+
+const log = createLogger('memory-repo');
 
 export interface AgentMemory {
   id: string;
@@ -84,4 +88,52 @@ export async function recordOutcome(id: string, outcome: string): Promise<void> 
     'UPDATE agent_memory SET outcome = $1, updated_at = NOW() WHERE id = $2',
     [outcome, id],
   );
+}
+
+// ---------------------------------------------------------------------------
+// Embedding-powered memory (RAG)
+// ---------------------------------------------------------------------------
+
+/** Save an embedding for a memory record. */
+export async function saveMemoryEmbedding(memoryId: string, category: string, subject: string, content: string): Promise<void> {
+  try {
+    const text = memoryToEmbeddingText(category, subject, content);
+    const embedding = await generateEmbedding(text);
+    const vectorStr = `[${embedding.join(',')}]`;
+
+    // Remove old embedding for this memory if exists
+    await query(
+      `DELETE FROM embeddings WHERE source_type = 'memory' AND source_id = $1`,
+      [memoryId],
+    );
+
+    await query(
+      `INSERT INTO embeddings (source_type, source_id, content, embedding, metadata)
+       VALUES ('memory', $1, $2, $3::vector, $4)`,
+      [memoryId, text, vectorStr, JSON.stringify({ category, subject })],
+    );
+  } catch (err) {
+    log.warn({ err, memoryId }, 'Failed to save memory embedding — memory saved without vector');
+  }
+}
+
+/** Search memories by semantic similarity to a query string. */
+export async function searchMemoriesBySimilarity(
+  queryText: string,
+  limit = 5,
+): Promise<AgentMemory[]> {
+  const embedding = await generateEmbedding(queryText);
+  const vectorStr = `[${embedding.join(',')}]`;
+
+  const { rows } = await query<AgentMemory>(
+    `SELECT m.*
+     FROM agent_memory m
+     JOIN embeddings e ON e.source_type = 'memory' AND e.source_id = m.id::text
+     WHERE m.superseded_by IS NULL
+       AND (m.valid_until IS NULL OR m.valid_until > NOW())
+     ORDER BY e.embedding <=> $1::vector
+     LIMIT $2`,
+    [vectorStr, limit],
+  );
+  return rows;
 }

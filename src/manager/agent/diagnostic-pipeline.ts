@@ -1,6 +1,7 @@
 import { runManagerAgent } from './agent.js';
 import { notifyBosses, notifyTech } from '../telegram/notifications.js';
 import { createLogger } from '../../shared/logger.js';
+import { MODEL_GPT4O } from '../../shared/ai/client.js';
 
 const log = createLogger('manager').child({ module: 'diagnostic' });
 
@@ -21,6 +22,7 @@ export async function runHourlyDiagnostic(): Promise<void> {
       {
         preamble: 'Esta es tu ejecución de diagnóstico horario automático.',
         maxTokens: 2048,
+        model: MODEL_GPT4O,
       },
     );
 

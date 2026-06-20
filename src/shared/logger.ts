@@ -8,7 +8,7 @@ export const logger = pino({
     : undefined,
 });
 
-/** Create a child logger scoped to a mode. */
-export function createLogger(mode: 'consultant' | 'manager') {
+/** Create a child logger scoped to a module. */
+export function createLogger(mode: string) {
   return logger.child({ mode });
 }

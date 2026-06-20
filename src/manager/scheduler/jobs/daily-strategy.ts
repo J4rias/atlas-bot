@@ -1,6 +1,7 @@
 import { runManagerAgent } from '../../agent/agent.js';
 import { notifyBosses, notifyTech } from '../../telegram/notifications.js';
 import { createLogger } from '../../../shared/logger.js';
+import { MODEL_GPT4O } from '../../../shared/ai/client.js';
 
 const log = createLogger('manager').child({ job: 'daily-strategy' });
 
@@ -18,6 +19,7 @@ export async function runDailyStrategy(): Promise<void> {
     const response = await runManagerAgent(DAILY_STRATEGY_PROMPT, {
       preamble: 'Este es tu reporte estratégico diario automático. Ejecuta todos los análisis cruzados.',
       maxTokens: 3072,
+      model: MODEL_GPT4O,
     });
 
     // The daily strategy always sends (unlike hourly diagnostic which filters)

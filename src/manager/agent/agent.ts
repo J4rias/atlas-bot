@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type OpenAI from 'openai';
-import { getOpenAIClient, MODEL_GPT4O } from '../../shared/ai/client.js';
+import { getOpenAIClient, MODEL_GPT4O, MODEL_GPT4O_MINI } from '../../shared/ai/client.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
@@ -8,13 +8,50 @@ import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
 
 const log = createLogger('manager').child({ module: 'agent' });
 
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS_MINI = 4;
+const MAX_TOOL_ROUNDS_FULL = 8;
+
+// ---------------------------------------------------------------------------
+// Model router: GPT-4o for complex analysis, GPT-4o-mini for simple lookups
+// ---------------------------------------------------------------------------
+
+const COMPLEX_PATTERNS = [
+  /an[aá]li(sis|za|ce)/i,
+  /estrat[eé]gi/i,
+  /compar[ae]/i,
+  /tendencia/i,
+  /correlaci[oó]n/i,
+  /reporte\s+(estrat|diario|semanal|completo)/i,
+  /diagn[oó]stic/i,
+  /recomend/i,
+  /oportunidad/i,
+  /riesgo/i,
+  /proyecci[oó]n/i,
+  /impacto/i,
+  /por\s*qu[eé]/i,
+  /c[oó]mo\s+(mejor|aument|reduc|optimi)/i,
+  /cross.*analy/i,
+  /margin|margen/i,
+  /rentabilidad/i,
+  /segmenta/i,
+  /churn/i,
+  /retenci[oó]n/i,
+];
+
+function selectModel(prompt: string): string {
+  const isComplex = COMPLEX_PATTERNS.some((p) => p.test(prompt));
+  const model = isComplex ? MODEL_GPT4O : MODEL_GPT4O_MINI;
+  log.debug({ model, isComplex, prompt: prompt.slice(0, 80) }, 'Model selected');
+  return model;
+}
 
 interface AgentOptions {
   /** Extra context to prepend (e.g., "This is an hourly diagnostic run"). */
   preamble?: string;
   /** Max tokens for the response. */
   maxTokens?: number;
+  /** Force a specific model (bypasses router). */
+  model?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,10 +85,13 @@ export async function runManagerAgent(
 ): Promise<string> {
   const client = getOpenAIClient();
 
-  // Load recent memories as context
+  // Load memories: semantic search (RAG) with fallback to recent
   let memoryContext: string | undefined;
   try {
-    const memories = await memoryRepo.findMemories(undefined, undefined, 15);
+    let memories = await memoryRepo.searchMemoriesBySimilarity(userPrompt, 8).catch(() => null);
+    if (!memories || memories.length === 0) {
+      memories = await memoryRepo.findMemories(undefined, undefined, 10);
+    }
     if (memories.length > 0) {
       memoryContext = memories
         .map((m) => `[${m.category}] ${m.subject}: ${m.content}` + (m.outcome ? ` → Resultado: ${m.outcome}` : ''))
@@ -72,11 +112,13 @@ export async function runManagerAgent(
     { role: 'user', content: fullUserMessage },
   ];
 
+  const model = options.model ?? selectModel(userPrompt);
+  const maxRounds = model === MODEL_GPT4O_MINI ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
   let toolRounds = 0;
 
-  while (toolRounds < MAX_TOOL_ROUNDS) {
+  while (toolRounds < maxRounds) {
     const response = await client.chat.completions.create({
-      model: MODEL_GPT4O,
+      model,
       max_tokens: options.maxTokens ?? 2048,
       tools: openaiTools,
       messages,
@@ -128,6 +170,7 @@ export async function runManagerAgent(
 
     log.info(
       {
+        model,
         toolRounds,
         tokensIn: response.usage?.prompt_tokens,
         tokensOut: response.usage?.completion_tokens,
