@@ -4,6 +4,7 @@ import { createBot, stopBot } from './telegram/bot.js';
 import { startCommand } from './telegram/commands/start.js';
 import { statusCommand } from './telegram/commands/status.js';
 import { askCommand, freeformHandler } from './telegram/commands/ask.js';
+import { teachCommand } from './telegram/commands/teach.js';
 import { registerCallbackHandlers } from './agent/escalation.js';
 import { loadRegistry } from './agent/action-registry.js';
 import { startScheduler, stopScheduler } from './scheduler/cron.js';
@@ -55,6 +56,7 @@ async function start() {
     bot.command('help', startCommand);
     bot.command('status', statusCommand);
     bot.command('ask', askCommand);
+    bot.command('teach', teachCommand);
 
     // Register callback handlers for inline buttons
     registerCallbackHandlers();

@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.js';
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
+import * as kbRepo from '../../shared/db/repositories/kb.repo.js';
 import * as erp from '../../shared/services/erp.js';
 import {
   computeRateSalesCorrelation,
@@ -62,6 +63,30 @@ const memoryTools: Anthropic.Tool[] = [
         },
       },
       required: ['category', 'subject', 'content'],
+    },
+  },
+];
+
+const knowledgeTools: Anthropic.Tool[] = [
+  {
+    name: 'search_knowledge',
+    description:
+      'Search the knowledge base for domain expertise: arbitrage rules, regional dynamics, customer behavior patterns, ' +
+      'currency behavior, seasonal patterns, and business rules taught by the team. ' +
+      'Use this BEFORE making recommendations to ground your analysis in real domain knowledge.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What to search for (e.g., "tasa sube clientes frenan", "harina diciembre", "colombianos pago COP")',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default 5)',
+        },
+      },
+      required: ['query'],
     },
   },
 ];
@@ -273,11 +298,12 @@ const crossAnalysisTools: Anthropic.Tool[] = [
   },
 ];
 
-/** All tools available to the Manager: shared ERP tools + BI tools + cross-analysis tools + memory tools. */
+/** All tools available to the Manager. */
 export const allManagerTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   ...businessIntelligenceTools,
   ...crossAnalysisTools,
+  ...knowledgeTools,
   ...memoryTools,
 ];
 
@@ -301,6 +327,29 @@ export async function executeManagerTool(
   }
 
   switch (name) {
+    // ----- Knowledge base tools -----
+
+    case 'search_knowledge': {
+      const searchQuery = input.query as string;
+      const limit = (input.limit as number) ?? 5;
+
+      try {
+        const results = await kbRepo.searchKnowledge(searchQuery, limit);
+        if (results.length === 0) {
+          return JSON.stringify({ results: [], message: 'No matching knowledge found.' });
+        }
+        return JSON.stringify(
+          results.map((r) => ({
+            content: r.content,
+            category: (r.metadata as Record<string, unknown>).category ?? 'general',
+            relevance: Math.round(r.score * 100) + '%',
+          })),
+        );
+      } catch {
+        return JSON.stringify({ error: 'Knowledge base not available.' });
+      }
+    }
+
     // ----- Memory tools -----
 
     case 'read_memory': {

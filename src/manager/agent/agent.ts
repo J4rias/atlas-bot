@@ -5,6 +5,7 @@ import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
+import * as kbRepo from '../../shared/db/repositories/kb.repo.js';
 
 const log = createLogger('manager').child({ module: 'agent' });
 
@@ -101,7 +102,21 @@ export async function runManagerAgent(
     log.debug('Memory not available, proceeding without context');
   }
 
-  const systemPrompt = buildManagerPrompt(memoryContext);
+  // Load relevant domain knowledge from KB
+  let knowledgeContext: string | undefined;
+  try {
+    const kbResults = await kbRepo.searchKnowledge(userPrompt, 5).catch(() => null);
+    if (kbResults && kbResults.length > 0) {
+      const relevant = kbResults.filter((r) => r.score > 0.3);
+      if (relevant.length > 0) {
+        knowledgeContext = relevant.map((r) => r.content).join('\n\n');
+      }
+    }
+  } catch {
+    log.debug('Knowledge base not available, proceeding without KB context');
+  }
+
+  const systemPrompt = buildManagerPrompt(memoryContext, knowledgeContext);
   const memoryReminder = 'IMPORTANTE: Responde al usuario con el análisis completo Y TAMBIEN usa write_memory para guardar hallazgos. Haz ambas cosas: responder con datos + guardar en memoria. NUNCA respondas solo confirmando que guardaste — el usuario espera ver los datos.';
   const fullUserMessage = options.preamble
     ? `${options.preamble}\n\n${userPrompt}\n\n${memoryReminder}`

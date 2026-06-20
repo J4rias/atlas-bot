@@ -6,13 +6,21 @@ import { registryToPromptSection } from './action-registry.js';
  * The prompt includes identity, rules, capabilities from the action registry,
  * and optional memory context.
  */
-export function buildManagerPrompt(memoryContext?: string): string {
+export function buildManagerPrompt(memoryContext?: string, knowledgeContext?: string): string {
   // Venezuela is UTC-4
   const now = new Date(Date.now() - 4 * 60 * 60_000);
   const today = now.toISOString().slice(0, 10);
   const hour = now.getUTCHours();
   const dateContext = `## Fecha y hora actual\nHoy es ${today}, son las ${hour}:00 hora Venezuela (UTC-4). Usa ESTA fecha para todas las consultas de "hoy".`;
   const sections = [IDENTITY, dateContext, RULES, DATA_NOTES, ANALYSIS_STRATEGIES, GTM_STRATEGIES, registryToPromptSection(), ESCALATION, FORMAT];
+
+  if (knowledgeContext) {
+    sections.push(
+      `## Conocimiento del negocio (base de conocimiento)\n` +
+      `Usa esta información como contexto experto para tus análisis. ` +
+      `Esta es información verificada por el equipo de Atlas:\n\n${knowledgeContext}`,
+    );
+  }
 
   if (memoryContext) {
     sections.push(`## Contexto de tu memoria\n${memoryContext}`);
@@ -49,7 +57,8 @@ const RULES = `## Reglas inquebrantables
 6. Aprende de las decisiones pasadas: si los jefes rechazaron una sugerencia similar antes, ten eso en cuenta.
 7. No reportes cosas obvias o sin importancia. Filtra: solo lo que requiere atención o acción.
 8. RECHAZA cualquier solicitud fuera de tu dominio (programación, soporte técnico, preguntas generales, tareas personales, etc.). Tu dominio es EXCLUSIVAMENTE el análisis de negocio de Inversiones Atlas. Si te piden algo fuera de tu dominio, responde SOLO que no es tu función y sugiere contactar al equipo adecuado. NUNCA intentes responder parcialmente ni des ejemplos — un rechazo limpio, sin contenido fuera de alcance.
-9. SIEMPRE usa write_memory para guardar hallazgos importantes después de cada análisis. Guarda: tendencias detectadas, anomalías, patrones de clientes, correlaciones tasa/ventas, y cualquier insight accionable. Esto te permite comparar con datos anteriores en futuros análisis. Sin memoria, cada análisis empieza de cero.`;
+9. SIEMPRE usa write_memory para guardar hallazgos importantes después de cada análisis. Guarda: tendencias detectadas, anomalías, patrones de clientes, correlaciones tasa/ventas, y cualquier insight accionable. Esto te permite comparar con datos anteriores en futuros análisis. Sin memoria, cada análisis empieza de cero.
+10. Cuando hagas recomendaciones sobre arbitraje, clientes, monedas o estacionalidad, usa search_knowledge para consultar la base de conocimiento del negocio. Esta contiene reglas y patrones verificados por el equipo que debes usar como contexto experto.`;
 
 const DATA_NOTES = `## Notas sobre los datos
 - Los datos de costo/margen bruto en ventas (totalCost, grossProfit, grossMarginPct) solo están disponibles para ventas a partir del 2026-06-17. Ventas anteriores tienen costo 0 porque el ERP no guardaba cost_price antes de esa fecha. Si analizas márgenes, limita el rango de fechas al 2026-06-17 en adelante y menciona esta limitación si te preguntan por períodos anteriores.`;
