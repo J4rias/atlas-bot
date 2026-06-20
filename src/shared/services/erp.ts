@@ -203,8 +203,8 @@ export async function getSalesStats(opts?: {
   topLimit?: number;
 }): Promise<SalesStats> {
   const params: Record<string, string | number | boolean> = {};
-  if (opts?.startDate) params.start_date = opts.startDate;
-  if (opts?.endDate) params.end_date = opts.endDate;
+  if (opts?.startDate) params.from = opts.startDate;
+  if (opts?.endDate) params.to = opts.endDate;
   if (opts?.warehouseId) params.warehouse_id = opts.warehouseId;
   if (opts?.summaryOnly) params.summary_only = true;
   if (opts?.topLimit) params.top_limit = opts.topLimit;
@@ -232,8 +232,8 @@ export async function getProductSales(
   endDate?: string,
 ): Promise<ProductSalesItem[]> {
   const params: Record<string, string> = {};
-  if (startDate) params.start_date = startDate;
-  if (endDate) params.end_date = endDate;
+  if (startDate) params.from = startDate;
+  if (endDate) params.to = endDate;
 
   const { data: res } = await client.get('/api/sales/product-sales', { params });
   return res.data;
@@ -291,8 +291,8 @@ export async function getRateHistory(opts?: {
   const params: Record<string, string | number> = {};
   if (opts?.fromCurrency) params.from_currency = opts.fromCurrency;
   if (opts?.toCurrency) params.to_currency = opts.toCurrency;
-  if (opts?.dateFrom) params.date_from = opts.dateFrom;
-  if (opts?.dateTo) params.date_to = opts.dateTo;
+  if (opts?.dateFrom) params.from = opts.dateFrom;
+  if (opts?.dateTo) params.to = opts.dateTo;
   if (opts?.limit) params.limit = opts.limit;
 
   const { data: res } = await client.get('/api/exchange-rates', { params });
