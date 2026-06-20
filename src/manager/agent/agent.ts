@@ -62,9 +62,10 @@ export async function runManagerAgent(
   }
 
   const systemPrompt = buildManagerPrompt(memoryContext);
+  const memoryReminder = 'RECUERDA: Después de analizar, usa write_memory para guardar hallazgos importantes antes de responder.';
   const fullUserMessage = options.preamble
-    ? `${options.preamble}\n\n${userPrompt}`
-    : userPrompt;
+    ? `${options.preamble}\n\n${userPrompt}\n\n${memoryReminder}`
+    : `${userPrompt}\n\n${memoryReminder}`;
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -84,7 +85,7 @@ export async function runManagerAgent(
     const choice = response.choices[0];
     const assistantMessage = choice.message;
 
-    if (choice.finish_reason === 'tool_calls' && assistantMessage.tool_calls?.length) {
+    if (assistantMessage.tool_calls?.length) {
       toolRounds++;
       messages.push(assistantMessage);
 
