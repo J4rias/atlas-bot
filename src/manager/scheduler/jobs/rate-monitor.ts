@@ -29,16 +29,17 @@ export async function runRateMonitor() {
     const snapshot: Record<string, number> = {};
 
     for (const rate of currentRates) {
-      snapshot[rate.currency] = rate.rate;
+      const key = `${rate.from_currency}_${rate.to_currency}`;
+      snapshot[key] = rate.rate;
 
-      const oldRate = lastRates[rate.currency];
+      const oldRate = lastRates[key];
       if (oldRate == null) continue;
 
       const deltaPct = Math.abs((rate.rate - oldRate) / oldRate) * 100;
 
       if (deltaPct >= CHANGE_THRESHOLD_PCT) {
         alerts.push({
-          currency: rate.currency,
+          currency: key,
           oldRate,
           newRate: rate.rate,
           deltaPct: Math.round(deltaPct * 100) / 100,

@@ -22,7 +22,7 @@ const COMPLEX_PATTERNS = [
   /compar[ae]/i,
   /tendencia/i,
   /correlaci[oó]n/i,
-  /reporte\s+(estrat|diario|semanal|completo)/i,
+  /reporte/i,
   /diagn[oó]stic/i,
   /recomend/i,
   /oportunidad/i,
@@ -37,6 +37,14 @@ const COMPLEX_PATTERNS = [
   /segmenta/i,
   /churn/i,
   /retenci[oó]n/i,
+  /cruza|cruzar|cruce/i,
+  /plan\s+de\s+acci[oó]n/i,
+  /plan\s+para/i,
+  /resumen.*(semana|mes|dia)/i,
+  /qu[eé]\s+(hago|hacemos|sugieres|recomiendas)/i,
+  /evalua|eval[uú]a/i,
+  /optimiz/i,
+  /priori(za|dad)/i,
 ];
 
 function selectModel(prompt: string): string {

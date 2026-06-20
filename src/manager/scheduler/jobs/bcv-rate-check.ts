@@ -75,7 +75,7 @@ export async function runBcvRateCheck() {
 
     // Fetch ERP rates
     const erpRates = await getExchangeRates();
-    const erpUsdVes = erpRates.find((r) => r.currency === 'VES');
+    const erpUsdVes = erpRates.find((r) => r.from_currency === 'USD' && r.to_currency === 'VES');
 
     if (!erpUsdVes) {
       log.warn('No USD/VES rate found in ERP');

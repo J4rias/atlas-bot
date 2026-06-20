@@ -17,14 +17,14 @@ export async function runDailyStrategy(): Promise<void> {
 
   try {
     const response = await runManagerAgent(DAILY_STRATEGY_PROMPT, {
-      preamble: 'Este es tu reporte estratégico diario automático. Ejecuta todos los análisis cruzados.',
+      preamble: 'Este es tu plan de ventas diario. Es el reporte más importante del día — los jefes lo leen al abrir la jornada.',
       maxTokens: 3072,
       model: MODEL_GPT4O,
     });
 
-    // The daily strategy always sends (unlike hourly diagnostic which filters)
-    log.info('Daily strategy report generated — sending to bosses');
-    await notifyBosses(`REPORTE ESTRATEGICO DIARIO\n\n${response}`);
+    // The daily plan always sends (unlike hourly diagnostic which filters)
+    log.info('Daily sales plan generated — sending to bosses');
+    await notifyBosses(`${response}`);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, 'Daily strategy report failed');
@@ -39,38 +39,75 @@ export async function runDailyStrategy(): Promise<void> {
   }
 }
 
-const DAILY_STRATEGY_PROMPT = `Genera tu reporte estratégico diario. Ejecuta TODOS estos análisis:
+const DAILY_STRATEGY_PROMPT = `Genera el PLAN DE VENTAS del día. Este es el reporte más importante — los jefes lo leen al iniciar la jornada para decidir qué hacer.
 
-1. ANÁLISIS TASA ↔ VENTAS (analyze_rate_sales_impact, últimos 7 días):
-   - ¿Cómo se correlaciona el movimiento de tasas con las ventas?
-   - ¿La tasa actual favorece o perjudica las ventas?
+PASO 1 — OBJETIVO $1M (obligatorio):
+- Usa get_sales_stats (start_date: 2026-01-01, end_date: fecha de ayer, summary_only: true) para obtener ventas acumuladas del año (totalRevenue)
+- Calcula: faltante para $1,000,000, días hábiles restantes (Lun-Sáb hasta 31 dic 2026), meta del día
+- Lee tu memoria (read_memory subject: daily_target) para ver la meta anterior. La meta de hoy NUNCA puede ser menor.
+- Consulta ventas de la última semana (get_sales_summary, últimos 7 días) para comparar el ritmo actual vs la meta. Si el promedio real supera la meta calculada, sube la meta a promedio × 1.05.
 
-2. PATRONES DE VENTAS (analyze_sales_patterns, últimas 4 semanas):
-   - ¿Qué días venden más? ¿La tendencia es creciente o decreciente?
-   - ¿Hay algún cambio respecto al patrón habitual?
+PASO 2 — TASAS DEL DIA (obligatorio):
+- Usa get_exchange_rates para obtener las tasas de HOY
+- Consulta ventas por moneda de ayer o últimos días (get_sales_stats → salesByCurrency)
+- NO alertes que la tasa cambió — eso pasa todos los días. Analiza el IMPACTO: "Si ayer recibimos $X en COP, al convertir hoy vs ayer hay $Y de diferencia."
+- Si el VES se está devaluando rápido, recomienda convertir rápido y cuantifica cuánto se pierde por día de espera.
 
-3. VALOR DE CLIENTES (analyze_customer_value, últimos 30 días):
-   - ¿Quiénes son los clientes más valiosos?
-   - ¿Qué tan concentrado está el ingreso?
+PASO 3 — ESTRATEGIAS DEL DIA (máximo 3):
+Cada estrategia DEBE ser:
+- CONCRETA: nombres de clientes, nombres de productos, cantidades, montos en USD
+- CUANTIFICADA: "esto genera ~$X,XXX que cubre N% de la meta del día"
+- EJECUTABLE HOY: algo que los jefes pueden hacer esta mañana
 
-4. CRUZA CON CRM:
-   - Consulta tu memoria (read_memory) para el análisis CRM del día.
-   - ¿Algún cliente de alto valor está en riesgo de churn? → ALERTA MÁXIMA.
+Para generar estrategias, consulta datos reales:
+- get_customer_insights → clientes con recompra esperada HOY o en riesgo de perderse. Nombres y montos.
+- get_inventory_health → qué hay disponible, qué está agotado, qué tiene rotación lenta (capital trabado)
+- analyze_customer_value → quiénes son los clientes más rentables
+- get_sales_stats (con topProducts) → productos estrella y su rendimiento compuesto (margen × rotación)
+- search_knowledge → reglas de arbitraje, patrones estacionales, reglas del negocio
+- read_memory → qué sugeriste ayer y qué resultado tuvo. Si algo funcionó, repite. Si no, ajusta.
 
-5. CONSULTA MEMORIA DE SUSTITUCIÓN:
-   - Lee la memoria de sustitución de productos (read_memory subject: product_substitution).
-   - ¿Hay algún producto estrella sin stock cuyo sustituto se está vendiendo?
+Ejemplos de estrategias BUENAS:
+- "Contactar a [nombre] — compra cada ~12 días, lleva 11. Su pedido habitual: $850. Cubre el 14% de la meta."
+- "Liquidar [producto] (45 días sin moverse, $2,300 en capital trabado). Ofrecerlo a los 5 clientes que lo compraron antes con -8%. Liberar ese capital para reponer [producto de alta rotación con mejor rendimiento compuesto]."
+- "Ayer recibimos $4,200 en COP. La tasa COP mejoró 0.8% hoy → convertir ahora genera $33 extra vs esperar."
+- "[Producto X] tiene 25% margen y rota cada 8 días (rendimiento compuesto ~1,140%/año). Está por agotarse. Priorizar reposición inmediata — cada día sin stock son ~$XXX que no se componen."
 
-6. RECOMENDACIÓN COMERCIAL (Go-to-Market):
-   - Con base en los 5 análisis anteriores, aplica las estrategias comerciales de tu prompt.
-   - Selecciona 1-2 estrategias que apliquen HOY según los datos reales (no fuerces una si no hay señal).
-   - Prioridad: reactivar clientes dormidos de alto valor > mover inventario lento > oportunidad de volumen.
-   - Si hay una fecha comercial importante próxima (ver calendario estacional), menciónala.
+Ejemplos de estrategias MALAS (NO hagas esto):
+- "Considerar hacer promociones" → ¿de qué? ¿a quién? ¿cuánto genera?
+- "La tasa subió, congelar precios" → la tasa siempre se mueve, no es estrategia
+- "Moneda preferida hoy: COP" → los clientes pagan con lo que tienen, no se elige
 
-FORMATO DEL REPORTE:
-- Resumen ejecutivo (2-3 líneas máximo)
-- Hallazgos clave con números (lista con bullet points)
-- TOP 3 ACCIONES PRIORIZADAS — ordenadas por impacto, cada una con qué hacer y por qué
-- Guarda un resumen del análisis en tu memoria (write_memory subject: daily_strategy)
+PASO 4 — ALERTAS OPERATIVAS (solo si hay):
+Reporta UNICAMENTE cosas que IMPIDEN vender:
+- Productos estrella agotados (que tienen demanda real, no cualquier producto)
+- Pre-órdenes pendientes > 24h (dinero esperando)
+- Clientes de alto valor que pasaron su ventana de recompra sin comprar
 
-IMPORTANTE: No decores. Ve al grano con datos y acciones concretas.`;
+NO alertes sobre: cambios de tasa (normal), stock bajo de productos que no se venden, cosas que no requieren acción.
+
+PASO 5 — GUARDAR EN MEMORIA:
+- write_memory (subject: daily_target, content: meta del día, acumulado del año, días restantes)
+- write_memory (subject: daily_strategy, content: resumen de lo sugerido hoy para evaluar mañana si funcionó)
+
+FORMATO DE SALIDA (texto plano para Telegram, sin markdown):
+
+PLAN DE VENTAS — [dia de la semana] [fecha]
+
+OBJETIVO $1M
+- Acumulado 2026: $XXX,XXX (XX% del objetivo)
+- Faltan: $XXX,XXX en N días hábiles
+- Meta hoy: $X,XXX
+
+ESTRATEGIAS DEL DIA
+1. [acción concreta con nombres, montos y % de la meta que cubre]
+2. [acción concreta con nombres, montos y % de la meta que cubre]
+3. [acción concreta con nombres, montos y % de la meta que cubre]
+
+ARBITRAJE
+- [oportunidad concreta con montos en USD, o "Sin oportunidad relevante hoy"]
+
+ALERTAS OPERATIVAS
+- [solo cosas que impiden vender, o "Sin alertas"]
+
+IMPORTANTE: No decores. No repitas información. Ve al grano. Los jefes necesitan saber QUE HACER, no un análisis académico.`;

@@ -13,15 +13,25 @@ const log = createLogger('manager').child({ module: 'scheduler' });
 
 const tasks: cron.ScheduledTask[] = [];
 
+/** Atlas operates Mon-Sat 7:00-18:00 Venezuela time (UTC-4). */
+function isBusinessHours(): boolean {
+  const now = new Date(Date.now() - 4 * 60 * 60_000);
+  const day = now.getUTCDay();   // 0=Sun in VEN time
+  const hour = now.getUTCHours(); // hour in VEN time
+  if (day === 0) return false;    // Sunday — closed
+  return hour >= 7 && hour <= 18;
+}
+
 export function startScheduler() {
   log.info('Starting scheduler');
 
   // Wire event bus → Telegram notifications
   registerEventListeners();
 
-  // Hourly diagnostic — every hour at minute 0
+  // Hourly diagnostic — every hour at minute 0, business hours only
   tasks.push(
     cron.schedule('0 * * * *', () => {
+      if (!isBusinessHours()) return;
       log.info('Cron: hourly diagnostic triggered');
       runHourlyDiagnostic().catch((err) => {
         log.error({ err }, 'Cron: hourly diagnostic failed');
@@ -29,9 +39,10 @@ export function startScheduler() {
     }),
   );
 
-  // Rate monitor — every 15 minutes
+  // Rate monitor — every 15 minutes, business hours only
   tasks.push(
     cron.schedule('*/15 * * * *', () => {
+      if (!isBusinessHours()) return;
       log.info('Cron: rate monitor triggered');
       runRateMonitor().catch((err) => {
         log.error({ err }, 'Cron: rate monitor failed');
@@ -39,9 +50,10 @@ export function startScheduler() {
     }),
   );
 
-  // Stock alert — every 60 minutes
+  // Stock alert — every 60 minutes, business hours only
   tasks.push(
     cron.schedule('0 * * * *', () => {
+      if (!isBusinessHours()) return;
       log.info('Cron: stock alert triggered');
       runStockAlert().catch((err) => {
         log.error({ err }, 'Cron: stock alert failed');

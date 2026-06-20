@@ -54,9 +54,13 @@ export interface PriceList extends PriceListSummary {
 }
 
 export interface ExchangeRate {
-  currency: string;
+  id: number;
+  from_currency: string;
+  to_currency: string;
   rate: number;
-  updated_at: string;
+  effective_date: string;
+  source: string | null;
+  is_active: boolean;
 }
 
 // ---------------------------------------------------------------------------

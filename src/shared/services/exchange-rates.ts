@@ -27,7 +27,11 @@ export async function captureRateSnapshot(
 
   const rates: Record<string, number> = {};
   for (const r of erpRates) {
-    rates[r.currency] = r.rate;
+    rates[r.to_currency] = r.rate;
+  }
+  // Alias: ERP uses 'VES', consultant code uses 'BS'
+  if (rates['VES'] && !rates['BS']) {
+    rates['BS'] = rates['VES'];
   }
 
   const now = new Date();

@@ -95,9 +95,10 @@ export async function executeErpTool(
     case 'get_exchange_rates': {
       const rates = await erp.getExchangeRates();
       const formatted = rates.map((r) => ({
-        currency: r.currency ?? 'unknown',
+        from: r.from_currency,
+        to: r.to_currency,
         rate: r.rate,
-        updated_at: r.updated_at,
+        date: r.effective_date,
       }));
       return JSON.stringify(formatted);
     }
