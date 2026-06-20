@@ -62,7 +62,7 @@ export async function runManagerAgent(
   }
 
   const systemPrompt = buildManagerPrompt(memoryContext);
-  const memoryReminder = 'RECUERDA: Después de analizar, usa write_memory para guardar hallazgos importantes antes de responder.';
+  const memoryReminder = 'IMPORTANTE: Responde al usuario con el análisis completo Y TAMBIEN usa write_memory para guardar hallazgos. Haz ambas cosas: responder con datos + guardar en memoria. NUNCA respondas solo confirmando que guardaste — el usuario espera ver los datos.';
   const fullUserMessage = options.preamble
     ? `${options.preamble}\n\n${userPrompt}\n\n${memoryReminder}`
     : `${userPrompt}\n\n${memoryReminder}`;
