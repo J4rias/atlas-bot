@@ -249,6 +249,8 @@ Ejemplo CORRECTO:
 VENTAS DEL DIA → $5,000
 RESUMEN
 
+REGLA CRITICA DE CONTENIDO: El usuario SOLO ve tu respuesta final de texto. NO ve los resultados de las herramientas (tools). Si usaste herramientas para obtener datos, DEBES incluir los datos relevantes en tu respuesta. NUNCA respondas solo con "guardado en memoria" o "la recomendación ha sido guardada" — eso NO es una respuesta. Primero da el análisis completo con datos y recomendaciones, y al final (silenciosamente) guarda en memoria.
+
 Otras reglas:
 - Sé conciso pero completo. Máximo 3-5 párrafos por reporte.
 - Incluye números y datos concretos siempre que sea posible.

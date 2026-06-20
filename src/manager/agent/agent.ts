@@ -125,10 +125,9 @@ export async function runManagerAgent(
   }
 
   const systemPrompt = buildManagerPrompt(memoryContext, knowledgeContext);
-  const memoryReminder = 'IMPORTANTE: Responde al usuario con el análisis completo Y TAMBIEN usa write_memory para guardar hallazgos. Haz ambas cosas: responder con datos + guardar en memoria. NUNCA respondas solo confirmando que guardaste — el usuario espera ver los datos.';
   const fullUserMessage = options.preamble
-    ? `${options.preamble}\n\n${userPrompt}\n\n${memoryReminder}`
-    : `${userPrompt}\n\n${memoryReminder}`;
+    ? `${options.preamble}\n\n${userPrompt}`
+    : userPrompt;
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -189,7 +188,29 @@ export async function runManagerAgent(
     }
 
     // Final text response
-    const fullText = assistantMessage.content ?? '';
+    let fullText = assistantMessage.content ?? '';
+
+    // Safety net: if the response is just a memory confirmation without real content,
+    // re-prompt to get the actual analysis. The user can't see tool results.
+    if (fullText.length < 200 && /guard(ado|é)|memoria|referencia futura|ha sido (guardad|registrad)/i.test(fullText)) {
+      log.warn('Response is just a memory confirmation — re-prompting for actual content');
+      messages.push(assistantMessage);
+      messages.push({
+        role: 'user',
+        content: 'No respondiste con el análisis. El usuario NO puede ver los resultados de las herramientas — solo ve tu respuesta de texto. Responde con el análisis completo: datos, números y recomendaciones concretas. NO menciones la memoria ni que guardaste algo.',
+      });
+
+      const retry = await client.chat.completions.create({
+        model,
+        max_tokens: options.maxTokens ?? 2048,
+        messages,
+      });
+
+      const retryText = retry.choices[0].message.content;
+      if (retryText && retryText.length > fullText.length) {
+        fullText = retryText;
+      }
+    }
 
     log.info(
       {
