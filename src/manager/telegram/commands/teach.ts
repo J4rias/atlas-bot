@@ -4,16 +4,16 @@ import { createLogger } from '../../../shared/logger.js';
 
 const log = createLogger('manager').child({ command: 'teach' });
 
-const CATEGORIES = ['arbitraje', 'clientes', 'productos', 'monedas', 'region', 'temporada', 'general'] as const;
+const CATEGORIES = new Set(['arbitraje', 'clientes', 'productos', 'monedas', 'region', 'temporada', 'general']);
 
 const USAGE =
-  'Uso: /teach [categoria] [conocimiento]\n\n' +
-  'Categorias: arbitraje, clientes, productos, monedas, region, temporada, general\n\n' +
+  'Uso: /teach [texto]\n\n' +
+  'Opcionalmente empieza con una categoria: arbitraje, clientes, productos, monedas, region, temporada, general\n\n' +
   'Ejemplos:\n' +
-  '  /teach arbitraje Cuando la tasa sube mas de 3% en un dia, los bodegueros frenan compras por 48h\n' +
-  '  /teach clientes Los mayoristas de Ureña compran los lunes porque reciben transferencias de Colombia el viernes\n' +
-  '  /teach productos La harina PAN sube 30% en diciembre por las hallacas\n' +
-  '  /teach monedas Los colombianos prefieren pagar en efectivo COP, no Bancolombia, porque les cobran comision';
+  '  /teach los domingos no se trabaja, solo de lunes a sabado\n' +
+  '  /teach arbitraje cuando la tasa sube mas de 3%, los bodegueros frenan compras por 48h\n' +
+  '  /teach clientes los mayoristas de Ureña compran los lunes\n' +
+  '  /teach la harina PAN sube 30% en diciembre por las hallacas';
 
 export async function teachCommand(ctx: BotContext) {
   const text = ctx.message?.text ?? '';
@@ -24,26 +24,21 @@ export async function teachCommand(ctx: BotContext) {
     return;
   }
 
-  // Parse: first word is category, rest is content
+  // Try to parse category from first word, default to 'general' if not a valid category
   const spaceIdx = args.indexOf(' ');
-  if (spaceIdx === -1) {
-    await ctx.reply(USAGE);
-    return;
-  }
+  let category = 'general';
+  let content = args;
 
-  const categoryInput = args.slice(0, spaceIdx).toLowerCase();
-  const content = args.slice(spaceIdx + 1).trim();
+  if (spaceIdx !== -1) {
+    const firstWord = args.slice(0, spaceIdx).toLowerCase();
+    if (CATEGORIES.has(firstWord)) {
+      category = firstWord;
+      content = args.slice(spaceIdx + 1).trim();
+    }
+  }
 
   if (!content) {
     await ctx.reply(USAGE);
-    return;
-  }
-
-  const category = CATEGORIES.find((c) => c === categoryInput);
-  if (!category) {
-    await ctx.reply(
-      `Categoria "${categoryInput}" no valida.\n\nCategorias disponibles: ${CATEGORIES.join(', ')}`,
-    );
     return;
   }
 

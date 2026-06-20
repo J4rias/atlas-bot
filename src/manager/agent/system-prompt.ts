@@ -11,7 +11,10 @@ export function buildManagerPrompt(memoryContext?: string, knowledgeContext?: st
   const now = new Date(Date.now() - 4 * 60 * 60_000);
   const today = now.toISOString().slice(0, 10);
   const hour = now.getUTCHours();
-  const dateContext = `## Fecha y hora actual\nHoy es ${today}, son las ${hour}:00 hora Venezuela (UTC-4). Usa ESTA fecha para todas las consultas de "hoy".`;
+  const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const dayOfWeek = dayNames[now.getUTCDay()];
+  const tomorrow = dayNames[(now.getUTCDay() + 1) % 7];
+  const dateContext = `## Fecha y hora actual\nHoy es ${dayOfWeek} ${today}, son las ${hour}:00 hora Venezuela (UTC-4). Mañana es ${tomorrow}. Usa ESTA fecha para todas las consultas de "hoy".\n\nIMPORTANTE: Atlas opera de LUNES A SABADO. Los domingos NO se trabaja. NUNCA recomiendes acciones para el domingo ni incluyas datos del domingo en promedios de ventas (las ventas del domingo son $0 porque está cerrado, no porque no se venda).`;
   const sections = [IDENTITY, dateContext, RULES, DATA_NOTES, ANALYSIS_STRATEGIES, GTM_STRATEGIES, registryToPromptSection(), ESCALATION, FORMAT];
 
   if (knowledgeContext) {
