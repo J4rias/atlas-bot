@@ -42,7 +42,7 @@ export async function runRateMonitor() {
         alerts.push({
           currency: key,
           oldRate,
-          newRate: rate.rate,
+          newRate: currentRate,
           deltaPct: Math.round(deltaPct * 100) / 100,
         });
       }
