@@ -7,6 +7,8 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 COPY docs ./docs
 RUN npx tsc
+# tsc only compiles .ts — copy SQL migrations to dist
+RUN cp -r src/shared/db/migrations dist/shared/db/migrations
 
 # Stage 2: Runtime
 FROM node:22.16-alpine
