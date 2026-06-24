@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type OpenAI from 'openai';
-import { getZaiClient, MODEL_GLM_5_2, MODEL_GLM_FLASH } from '../../shared/ai/client.js';
+import { getZaiClient, MODEL_GLM_5_2, MODEL_GLM_FLASH, MODEL_GLM_FLASH_FALLBACK } from '../../shared/ai/client.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
@@ -81,6 +81,21 @@ function toOpenAITools(anthropicTools: Anthropic.Tool[]): OpenAI.ChatCompletionT
 const openaiTools = toOpenAITools(allManagerTools);
 
 // ---------------------------------------------------------------------------
+// Model fallback: if primary model is unavailable (429/500), try fallback
+// ---------------------------------------------------------------------------
+
+const FALLBACK_MAP: Record<string, string> = {
+  [MODEL_GLM_FLASH]: MODEL_GLM_FLASH_FALLBACK,
+};
+
+function isRetryableError(err: unknown): boolean {
+  const e = err as { status?: number; code?: string; message?: string };
+  if (e.status === 429 || e.status === 500 || e.status === 503) return true;
+  const msg = e.message ?? '';
+  return /overloaded|network error|temporarily/i.test(msg);
+}
+
+// ---------------------------------------------------------------------------
 // Agent: Z.ai GLM with tool-use loop
 // ---------------------------------------------------------------------------
 
@@ -134,17 +149,35 @@ export async function runManagerAgent(
     { role: 'user', content: fullUserMessage },
   ];
 
-  const model = options.model ?? selectModel(userPrompt);
-  const maxRounds = model === MODEL_GLM_FLASH ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
+  let model = options.model ?? selectModel(userPrompt);
+  const maxRounds = model === MODEL_GLM_FLASH || model === MODEL_GLM_FLASH_FALLBACK
+    ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
   let toolRounds = 0;
 
   while (toolRounds < maxRounds) {
-    const response = await client.chat.completions.create({
-      model,
-      max_tokens: options.maxTokens ?? 8192,
-      tools: openaiTools,
-      messages,
-    });
+    let response: OpenAI.ChatCompletion;
+    try {
+      response = await client.chat.completions.create({
+        model,
+        max_tokens: options.maxTokens ?? 8192,
+        tools: openaiTools,
+        messages,
+      });
+    } catch (err) {
+      const fallback = FALLBACK_MAP[model];
+      if (fallback && isRetryableError(err)) {
+        log.warn({ model, fallback, err: (err as Error).message }, 'Model unavailable — switching to fallback');
+        model = fallback;
+        response = await client.chat.completions.create({
+          model,
+          max_tokens: options.maxTokens ?? 8192,
+          tools: openaiTools,
+          messages,
+        });
+      } else {
+        throw err;
+      }
+    }
 
     const choice = response.choices[0];
     const assistantMessage = choice.message;

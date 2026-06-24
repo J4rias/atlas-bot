@@ -47,4 +47,5 @@ export const MODEL_HAIKU = 'claude-haiku-4-5-20251001';
 // Z.ai models (Manager)
 export const MODEL_GLM_5_2 = 'glm-5.2';
 export const MODEL_GLM_FLASH = 'glm-4.7-flash';
+export const MODEL_GLM_FLASH_FALLBACK = 'glm-4.5-flash';
 
