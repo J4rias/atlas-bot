@@ -3,6 +3,7 @@ import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
 import * as kbRepo from '../../shared/db/repositories/kb.repo.js';
 import * as erp from '../../shared/services/erp.js';
+import { notifyTech } from '../telegram/notifications.js';
 import {
   computeRateSalesCorrelation,
   computeWeeklySeasonality,
@@ -319,12 +320,38 @@ const crossAnalysisTools: Anthropic.Tool[] = [
   },
 ];
 
+const escalationTools: Anthropic.Tool[] = [
+  {
+    name: 'escalate_to_tech',
+    description:
+      'Send a technical escalation message to the tech team via Telegram. ' +
+      'Use when you encounter API errors, missing data, broken endpoints, or any technical issue ' +
+      'that requires developer intervention. Include what failed, the error details, and what you need fixed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        message: {
+          type: 'string',
+          description: 'The escalation message describing the technical issue, what failed, and what needs fixing',
+        },
+        priority: {
+          type: 'string',
+          enum: ['alta', 'media', 'baja'],
+          description: 'Priority level: alta (blocking), media (degraded), baja (cosmetic)',
+        },
+      },
+      required: ['message'],
+    },
+  },
+];
+
 /** All tools available to the Manager. */
 export const allManagerTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   ...businessIntelligenceTools,
   ...closureTools,
   ...crossAnalysisTools,
+  ...escalationTools,
   ...knowledgeTools,
   ...memoryTools,
 ];
@@ -514,18 +541,16 @@ export async function executeManagerTool(
     }
 
     case 'get_preorder_pipeline': {
-      const [stats, list] = await Promise.all([
-        erp.getPreOrderStats(),
-        erp.getPreOrders({
+      const stats = await erp.getPreOrderStats();
+      let recentOrders: unknown[] = [];
+      let total = 0;
+      try {
+        const list = await erp.getPreOrders({
           status: input.status as 'pending' | 'approved' | 'rejected' | 'converted' | 'expired' | undefined,
           channel: input.channel as 'messenger' | 'telegram' | 'web' | undefined,
           limit: (input.limit as number) ?? 20,
-        }),
-      ]);
-
-      return JSON.stringify({
-        stats,
-        recent_orders: list.data.map((o) => ({
+        });
+        recentOrders = list.data.map((o) => ({
           code: o.code,
           status: o.status,
           channel: o.channel,
@@ -534,9 +559,13 @@ export async function executeManagerTool(
           currency: o.currency,
           items: o.details.length,
           created_at: o.created_at,
-        })),
-        total: list.pagination.total,
-      });
+        }));
+        total = list.pagination.total;
+      } catch {
+        // ERP pre-orders list endpoint has a known bug — return stats only
+      }
+
+      return JSON.stringify({ stats, recent_orders: recentOrders, total });
     }
 
     case 'get_customer_insights': {
@@ -733,6 +762,14 @@ export async function executeManagerTool(
           low: result.customers.filter((c) => c.valueTier === 'low').length,
         },
       });
+    }
+
+    case 'escalate_to_tech': {
+      const message = input.message as string;
+      const priority = (input.priority as string) ?? 'media';
+      const text = `ESCALACION TECNICA (${priority.toUpperCase()})\n\n${message}`;
+      await notifyTech(text);
+      return JSON.stringify({ sent: true, priority });
     }
 
     default:
