@@ -4,6 +4,14 @@ import { createLogger } from '../../shared/logger.js';
 
 const log = createLogger('manager').child({ module: 'notifications' });
 
+/**
+ * Convert standard Markdown bold (**text**) to Telegram Markdown bold (*text*).
+ * GPT models default to **double asterisks**; Telegram expects *single*.
+ */
+export function toTelegramMarkdown(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+}
+
 /** Send a message to all boss recipients (group or individual). */
 export async function notifyBosses(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void> {
   const bot = getBot();

@@ -7,6 +7,7 @@ import { runBcvRateCheck } from './jobs/bcv-rate-check.js';
 import { runCustomerActivity } from './jobs/customer-activity.js';
 import { runDailyStrategy } from './jobs/daily-strategy.js';
 import { runProductSubstitution } from './jobs/product-substitution.js';
+import { runDailyClosure } from './jobs/daily-closure.js';
 import { registerEventListeners } from './listeners.js';
 
 const log = createLogger('manager').child({ module: 'scheduler' });
@@ -28,20 +29,19 @@ export function startScheduler() {
   // Wire event bus → Telegram notifications
   registerEventListeners();
 
-  // Hourly diagnostic — every hour at minute 0, business hours only
+  // Diagnostic — every 2h: 10 AM, 12 PM, 2 PM, 4 PM VEN (UTC-4 → 14,16,18,20 UTC), Mon-Sat
   tasks.push(
-    cron.schedule('0 * * * *', () => {
-      if (!isBusinessHours()) return;
-      log.info('Cron: hourly diagnostic triggered');
+    cron.schedule('0 14,16,18,20 * * 1-6', () => {
+      log.info('Cron: diagnostic triggered');
       runHourlyDiagnostic().catch((err) => {
-        log.error({ err }, 'Cron: hourly diagnostic failed');
+        log.error({ err }, 'Cron: diagnostic failed');
       });
     }),
   );
 
-  // Rate monitor — every 15 minutes, business hours only
+  // Rate monitor — every 15 minutes, Mon-Sat business hours only
   tasks.push(
-    cron.schedule('*/15 * * * *', () => {
+    cron.schedule('*/15 * * * 1-6', () => {
       if (!isBusinessHours()) return;
       log.info('Cron: rate monitor triggered');
       runRateMonitor().catch((err) => {
@@ -50,9 +50,9 @@ export function startScheduler() {
     }),
   );
 
-  // Stock alert — every 60 minutes, business hours only
+  // Stock alert — every 60 minutes, Mon-Sat business hours only
   tasks.push(
-    cron.schedule('0 * * * *', () => {
+    cron.schedule('0 * * * 1-6', () => {
       if (!isBusinessHours()) return;
       log.info('Cron: stock alert triggered');
       runStockAlert().catch((err) => {
@@ -61,9 +61,9 @@ export function startScheduler() {
     }),
   );
 
-  // BCV rate check — 8 AM, 12 PM, 3 PM Venezuela time (UTC-4 → 12, 16, 19 UTC)
+  // BCV rate check — 8 AM, 12 PM, 3 PM VEN (UTC-4 → 12, 16, 19 UTC), Mon-Sat
   tasks.push(
-    cron.schedule('0 12,16,19 * * *', () => {
+    cron.schedule('0 12,16,19 * * 1-6', () => {
       log.info('Cron: BCV rate check triggered');
       runBcvRateCheck().catch((err) => {
         log.error({ err }, 'Cron: BCV rate check failed');
@@ -71,9 +71,9 @@ export function startScheduler() {
     }),
   );
 
-  // Customer activity (CRM) — daily at 7 AM Venezuela (UTC-4 → 11:00 UTC)
+  // Customer activity (CRM) — daily at 7:55 AM VEN (UTC-4 → 11:55 UTC), Mon-Sat
   tasks.push(
-    cron.schedule('0 11 * * *', () => {
+    cron.schedule('55 11 * * 1-6', () => {
       log.info('Cron: customer activity triggered');
       runCustomerActivity().catch((err) => {
         log.error({ err }, 'Cron: customer activity failed');
@@ -81,10 +81,10 @@ export function startScheduler() {
     }),
   );
 
-  // Daily strategy report — 7:05 AM Venezuela (UTC-4 → 11:05 UTC)
+  // Daily sales plan — 8:00 AM VEN (UTC-4 → 12:00 UTC), Mon-Sat
   // Runs 5 min after CRM so churn data is already in memory
   tasks.push(
-    cron.schedule('5 11 * * *', () => {
+    cron.schedule('0 12 * * 1-6', () => {
       log.info('Cron: daily strategy triggered');
       runDailyStrategy().catch((err) => {
         log.error({ err }, 'Cron: daily strategy failed');
@@ -92,7 +92,17 @@ export function startScheduler() {
     }),
   );
 
-  // Product substitution analysis — Sunday 11 PM Venezuela (UTC-4 → Monday 03:00 UTC)
+  // Daily closing report — 6:00 PM VEN (UTC-4 → 22:00 UTC), Mon-Sat
+  tasks.push(
+    cron.schedule('0 22 * * 1-6', () => {
+      log.info('Cron: daily closure triggered');
+      runDailyClosure().catch((err) => {
+        log.error({ err }, 'Cron: daily closure failed');
+      });
+    }),
+  );
+
+  // Product substitution analysis — Monday 03:00 UTC (Sunday 11 PM VEN)
   tasks.push(
     cron.schedule('0 3 * * 1', () => {
       log.info('Cron: product substitution triggered');

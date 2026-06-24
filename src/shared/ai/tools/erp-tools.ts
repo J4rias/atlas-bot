@@ -9,7 +9,7 @@ export const erpToolDefinitions: Anthropic.Tool[] = [
   {
     name: 'search_products',
     description:
-      'Search the product catalog. Returns products with name, SKU, category, brand, presentations, and stock. Use this when the customer asks about a product or you need to look up availability.',
+      'Search the product catalog. Returns products with name, SKU, category, brand, presentations, stock (raw units), and stock_display (formatted as Bultos + unidades sueltas). Always use stock_display when reporting quantities.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -67,19 +67,23 @@ export async function executeErpTool(
     case 'search_products': {
       const categoryId = input.category_id as number | undefined;
       const products = await erp.getProducts(categoryId);
-      const summary = products.map((p) => ({
-        id: p.id,
-        sku: p.sku,
-        name: p.name,
-        category: p.category?.name ?? 'Sin categoría',
-        brand: p.brand?.name ?? null,
-        stock: erp.totalStock(p),
-        presentations: p.presentations.map((pr) => ({
-          id: pr.id,
-          name: pr.name,
-          units_per_package: pr.units_per_package,
-        })),
-      }));
+      const summary = products.map((p) => {
+        const stock = erp.totalStock(p);
+        return {
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category?.name ?? 'Sin categoría',
+          brand: p.brand?.name ?? null,
+          stock,
+          stock_display: erp.formatStock(stock, p.presentations),
+          presentations: p.presentations.map((pr) => ({
+            id: pr.id,
+            name: pr.name,
+            units_per_package: pr.units_per_package,
+          })),
+        };
+      });
       return JSON.stringify(summary);
     }
 

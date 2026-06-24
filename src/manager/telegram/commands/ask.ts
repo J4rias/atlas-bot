@@ -1,5 +1,6 @@
 import type { BotContext } from '../types.js';
 import { runManagerAgent } from '../../agent/agent.js';
+import { toTelegramMarkdown } from '../notifications.js';
 import { createLogger } from '../../../shared/logger.js';
 import { getThinkingMessage } from '../thinking.js';
 
@@ -27,7 +28,12 @@ export async function askCommand(ctx: BotContext) {
         'Si no puedes obtener la información necesaria, dilo claramente.',
     });
 
-    await ctx.reply(response);
+    const formatted = toTelegramMarkdown(response);
+    try {
+      await ctx.reply(formatted, { parse_mode: 'Markdown' });
+    } catch {
+      await ctx.reply(response);
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg, question }, 'Ask command failed');
@@ -53,7 +59,12 @@ export async function freeformHandler(ctx: BotContext) {
         'Si es feedback sobre una sugerencia previa, registra el resultado en tu memoria.',
     });
 
-    await ctx.reply(response);
+    const formatted = toTelegramMarkdown(response);
+    try {
+      await ctx.reply(formatted, { parse_mode: 'Markdown' });
+    } catch {
+      await ctx.reply(response);
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg, question }, 'Freeform handler failed');

@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type OpenAI from 'openai';
-import { getOpenAIClient, MODEL_GPT4O, MODEL_GPT4O_MINI } from '../../shared/ai/client.js';
+import { getZaiClient, MODEL_GLM_5_2, MODEL_GLM_FLASH } from '../../shared/ai/client.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
@@ -13,7 +13,7 @@ const MAX_TOOL_ROUNDS_MINI = 4;
 const MAX_TOOL_ROUNDS_FULL = 8;
 
 // ---------------------------------------------------------------------------
-// Model router: GPT-4o for complex analysis, GPT-4o-mini for simple lookups
+// Model router: GLM-5.2 for complex analysis, GLM-4.7-Flash for simple lookups
 // ---------------------------------------------------------------------------
 
 const COMPLEX_PATTERNS = [
@@ -49,7 +49,7 @@ const COMPLEX_PATTERNS = [
 
 function selectModel(prompt: string): string {
   const isComplex = COMPLEX_PATTERNS.some((p) => p.test(prompt));
-  const model = isComplex ? MODEL_GPT4O : MODEL_GPT4O_MINI;
+  const model = isComplex ? MODEL_GLM_5_2 : MODEL_GLM_FLASH;
   log.debug({ model, isComplex, prompt: prompt.slice(0, 80) }, 'Model selected');
   return model;
 }
@@ -81,18 +81,18 @@ function toOpenAITools(anthropicTools: Anthropic.Tool[]): OpenAI.ChatCompletionT
 const openaiTools = toOpenAITools(allManagerTools);
 
 // ---------------------------------------------------------------------------
-// Agent: OpenAI GPT-4o with tool-use loop
+// Agent: Z.ai GLM with tool-use loop
 // ---------------------------------------------------------------------------
 
 /**
  * Run the Manager agent with a given prompt.
- * Returns the final text response from GPT-4o.
+ * Returns the final text response from the GLM model.
  */
 export async function runManagerAgent(
   userPrompt: string,
   options: AgentOptions = {},
 ): Promise<string> {
-  const client = getOpenAIClient();
+  const client = getZaiClient();
 
   // Load memories: semantic search (RAG) with fallback to recent
   let memoryContext: string | undefined;
@@ -135,19 +135,31 @@ export async function runManagerAgent(
   ];
 
   const model = options.model ?? selectModel(userPrompt);
-  const maxRounds = model === MODEL_GPT4O_MINI ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
+  const maxRounds = model === MODEL_GLM_FLASH ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
   let toolRounds = 0;
 
   while (toolRounds < maxRounds) {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: options.maxTokens ?? 2048,
+      max_tokens: options.maxTokens ?? 8192,
       tools: openaiTools,
       messages,
     });
 
     const choice = response.choices[0];
     const assistantMessage = choice.message;
+
+    // GLM reasoning models put thinking in reasoning_content and answer in content.
+    // If content is empty but reasoning happened, the model ran out of tokens.
+    if (!assistantMessage.content && !assistantMessage.tool_calls?.length) {
+      log.warn({ finish_reason: choice.finish_reason }, 'Empty content from reasoning model — retrying with more tokens');
+      const retry = await client.chat.completions.create({
+        model,
+        max_tokens: 16384,
+        messages,
+      });
+      assistantMessage.content = retry.choices[0].message.content ?? '';
+    }
 
     if (assistantMessage.tool_calls?.length) {
       toolRounds++;
@@ -202,7 +214,7 @@ export async function runManagerAgent(
 
       const retry = await client.chat.completions.create({
         model,
-        max_tokens: options.maxTokens ?? 2048,
+        max_tokens: options.maxTokens ?? 8192,
         messages,
       });
 

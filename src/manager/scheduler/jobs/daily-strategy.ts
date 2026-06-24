@@ -1,12 +1,12 @@
 import { runManagerAgent } from '../../agent/agent.js';
-import { notifyBosses, notifyTech } from '../../telegram/notifications.js';
+import { notifyBosses, notifyTech, toTelegramMarkdown } from '../../telegram/notifications.js';
 import { createLogger } from '../../../shared/logger.js';
-import { MODEL_GPT4O } from '../../../shared/ai/client.js';
+import { MODEL_GLM_5_2 } from '../../../shared/ai/client.js';
 
 const log = createLogger('manager').child({ job: 'daily-strategy' });
 
 /**
- * Daily strategic report — runs at 7:05 AM Venezuela (11:05 UTC).
+ * Daily strategic report — runs at 8:00 AM Venezuela (12:00 UTC), Mon-Sat.
  * 5 minutes after CRM job so churn data is already in memory.
  *
  * Uses cross-analysis tools to generate a unified strategic view
@@ -19,12 +19,12 @@ export async function runDailyStrategy(): Promise<void> {
     const response = await runManagerAgent(DAILY_STRATEGY_PROMPT, {
       preamble: 'Este es tu plan de ventas diario. Es el reporte más importante del día — los jefes lo leen al abrir la jornada.',
       maxTokens: 3072,
-      model: MODEL_GPT4O,
+      model: MODEL_GLM_5_2,
     });
 
     // The daily plan always sends (unlike hourly diagnostic which filters)
     log.info('Daily sales plan generated — sending to bosses');
-    await notifyBosses(`${response}`);
+    await notifyBosses(toTelegramMarkdown(response), 'Markdown');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, 'Daily strategy report failed');
@@ -90,7 +90,7 @@ PASO 5 — GUARDAR EN MEMORIA:
 - write_memory (subject: daily_target, content: meta del día, acumulado del año, días restantes)
 - write_memory (subject: daily_strategy, content: resumen de lo sugerido hoy para evaluar mañana si funcionó)
 
-FORMATO DE SALIDA (texto plano para Telegram, sin markdown):
+FORMATO DE SALIDA (Telegram Markdown — usa *asteriscos simples* para negrillas, NO uses **doble asterisco**):
 
 PLAN DE VENTAS — [dia de la semana] [fecha]
 

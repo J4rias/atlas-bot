@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from 'axios';
 import { config } from '../config/index.js';
 import type {
   Category,
+  Presentation,
   Product,
   PriceList,
   PriceListSummary,
@@ -170,6 +171,31 @@ export async function getExchangeRates(): Promise<ExchangeRate[]> {
 export function totalStock(product: Product): number {
   if (!product.inventories) return 0;
   return product.inventories.reduce((sum, inv) => sum + (parseFloat(inv.quantity) || 0), 0);
+}
+
+/**
+ * Format stock as "X Bulto(s) + Y uds" using the product's bulk presentation.
+ * E.g. 106 units with 20 uds/bulto → "5 Bulto(s) + 6 uds"
+ */
+export function formatStock(totalUnits: number, presentations: Presentation[]): string {
+  if (totalUnits <= 0) return '0 uds';
+
+  // Find bulk presentation: prefer default, then highest units_per_package
+  const bulk = presentations.find((p) => p.is_default && p.units_per_package > 1)
+    ?? presentations
+        .filter((p) => p.units_per_package > 1)
+        .sort((a, b) => b.units_per_package - a.units_per_package)[0];
+
+  if (!bulk || bulk.units_per_package <= 1) return `${totalUnits} uds`;
+
+  const upp = bulk.units_per_package;
+  const pkgs = Math.floor(totalUnits / upp);
+  const rem = totalUnits % upp;
+  const label = bulk.packagingType?.name ?? 'Bulto';
+
+  if (pkgs === 0) return `${rem} uds`;
+  if (rem === 0) return `${pkgs} ${label}(s)`;
+  return `${pkgs} ${label}(s) + ${rem} uds`;
 }
 
 /** Expose the raw axios client for advanced ERP queries. */

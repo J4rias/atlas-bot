@@ -1,4 +1,4 @@
-import { getProducts, totalStock } from '../../../shared/services/erp.js';
+import { getProducts, totalStock, formatStock } from '../../../shared/services/erp.js';
 import * as memoryRepo from '../../../shared/db/repositories/memory.repo.js';
 import { createLogger } from '../../../shared/logger.js';
 import { eventBus } from '../triggers/event-bus.js';
@@ -20,7 +20,7 @@ export async function runStockAlert() {
   try {
     const products = await getProducts();
 
-    const criticalProducts: { productId: number; productName: string; currentStock: number }[] = [];
+    const criticalProducts: { productId: number; productName: string; currentStock: number; stockDisplay: string }[] = [];
 
     for (const product of products) {
       const stock = totalStock(product);
@@ -34,6 +34,7 @@ export async function runStockAlert() {
           productId: product.id,
           productName: product.name,
           currentStock: stock,
+          stockDisplay: formatStock(stock, product.presentations),
         });
 
         alertedAt.set(product.id, Date.now());

@@ -6,7 +6,7 @@ export const eventBus = new EventEmitter();
 // Event types for type safety
 export interface ManagerEvents {
   'rate:significant-change': { currency: string; oldRate: number; newRate: number; deltaPct: number };
-  'stock:critical-low': { productId: number; productName: string; currentStock: number; averageSales: number };
+  'stock:critical-low': { productId: number; productName: string; currentStock: number; stockDisplay: string; averageSales: number };
   'diagnostic:complete': { wasRelevant: boolean; summary: string };
 }
 

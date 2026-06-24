@@ -35,6 +35,10 @@ export const config = {
     apiKey: envOptional('OPENAI_API_KEY'),
   },
 
+  zai: {
+    apiKey: envOptional('ZAI_API_KEY'),
+  },
+
   // Mode 1: Consultant (Messenger)
   meta: {
     verifyToken: envOptional('META_VERIFY_TOKEN'),

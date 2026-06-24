@@ -145,7 +145,8 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
     name: 'get_inventory_health',
     description:
       'Get a consolidated inventory health report: products below reorder point (low stock) ' +
-      'and total inventory valuation. Returns both in a single call.',
+      'and total inventory valuation. Returns both in a single call. ' +
+      'Quantities include quantity_display and available_display formatted as Bultos + unidades sueltas.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -237,6 +238,26 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
   },
 ];
 
+const closureTools: Anthropic.Tool[] = [
+  {
+    name: 'get_daily_closure',
+    description:
+      'Get the daily cash register closure (cierre de caja) from the ERP. Returns totals in USD and COP, ' +
+      'payments breakdown by method and currency, credit collected by currency, and cash refunds. ' +
+      'Use this for the end-of-day closing report to match the ERP cierre de caja exactly.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date: {
+          type: 'string',
+          description: 'Date in YYYY-MM-DD format (default: today)',
+        },
+      },
+      required: [],
+    },
+  },
+];
+
 const crossAnalysisTools: Anthropic.Tool[] = [
   {
     name: 'analyze_rate_sales_impact',
@@ -302,6 +323,7 @@ const crossAnalysisTools: Anthropic.Tool[] = [
 export const allManagerTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   ...businessIntelligenceTools,
+  ...closureTools,
   ...crossAnalysisTools,
   ...knowledgeTools,
   ...memoryTools,
@@ -438,10 +460,14 @@ export async function executeManagerTool(
     case 'get_inventory_health': {
       const warehouseId = input.warehouse_id as number | undefined;
 
-      const [lowStock, valuation] = await Promise.all([
+      const [lowStock, valuation, products] = await Promise.all([
         erp.getLowStockAlerts(warehouseId),
         erp.getInventoryValuation(warehouseId),
+        erp.getProducts(), // cached — used to get presentations for stock display
       ]);
+
+      // Build product_id → presentations map for stock formatting
+      const presentationsById = new Map(products.map((p) => [p.id, p.presentations]));
 
       return JSON.stringify({
         low_stock: {
@@ -450,7 +476,9 @@ export async function executeManagerTool(
             product: a.product?.name ?? `ID ${a.product_id}`,
             sku: a.product?.sku,
             quantity: a.quantity,
+            quantity_display: erp.formatStock(a.quantity, presentationsById.get(a.product_id) ?? []),
             available: a.available_quantity,
+            available_display: erp.formatStock(a.available_quantity, presentationsById.get(a.product_id) ?? []),
             reorder_point: a.product?.reorder_point,
             category: a.product?.category?.name,
             warehouse: a.warehouse?.name,
@@ -595,6 +623,14 @@ export async function executeManagerTool(
         new_inactive: { count: newInactive.length, customers: newInactive },
         healthy: { count: healthy.length },
       });
+    }
+
+    // ----- Closure tools -----
+
+    case 'get_daily_closure': {
+      const date = input.date as string | undefined;
+      const closure = await erp.getDailyClosure(date);
+      return JSON.stringify(closure);
     }
 
     // ----- Cross-analysis tools -----

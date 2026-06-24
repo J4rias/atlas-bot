@@ -1,7 +1,7 @@
 import { runManagerAgent } from './agent.js';
-import { notifyBosses, notifyTech } from '../telegram/notifications.js';
+import { notifyBosses, notifyTech, toTelegramMarkdown } from '../telegram/notifications.js';
 import { createLogger } from '../../shared/logger.js';
-import { MODEL_GPT4O } from '../../shared/ai/client.js';
+import { MODEL_GLM_5_2 } from '../../shared/ai/client.js';
 
 const log = createLogger('manager').child({ module: 'diagnostic' });
 
@@ -22,7 +22,7 @@ export async function runHourlyDiagnostic(): Promise<void> {
       {
         preamble: 'Esta es tu ejecución de diagnóstico horario automático.',
         maxTokens: 2048,
-        model: MODEL_GPT4O,
+        model: MODEL_GLM_5_2,
       },
     );
 
@@ -33,7 +33,7 @@ export async function runHourlyDiagnostic(): Promise<void> {
       // Strip the RELEVANCE line and send the actual report
       const report = response.replace(/^RELEVANCE:\s*(YES|NO)\s*\n*/i, '');
       log.info('Diagnostic found relevant findings — sending to bosses');
-      await notifyBosses(`*Diagnóstico horario*\n\n${report}`);
+      await notifyBosses(`*Diagnóstico horario*\n\n${toTelegramMarkdown(report)}`, 'Markdown');
     } else {
       log.info('Diagnostic found nothing relevant — skipping notification');
     }
@@ -46,6 +46,7 @@ export async function runHourlyDiagnostic(): Promise<void> {
       `Qué intenté: Diagnóstico horario automático\n` +
       `Qué falló: ${msg}\n` +
       `Prioridad: MEDIA`,
+      'Markdown',
     );
   }
 }
@@ -80,5 +81,7 @@ const DIAGNOSTIC_PROMPT = `Ejecuta tu diagnóstico horario. Sigue estos pasos:
    - Recomendación accionable
 
 5. Guarda en tu memoria cualquier observación nueva que descubras para futuras comparaciones (write_memory).
+
+FORMATO: Usa *asteriscos simples* para negrillas (formato Telegram). NO uses **doble asterisco**.
 
 Recuerda: no reportes cosas sin importancia. Los jefes no quieren spam. Prioriza hallazgos accionables.`;
