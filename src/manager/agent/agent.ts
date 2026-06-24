@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type OpenAI from 'openai';
-import { getZaiClient, MODEL_GLM_5_2, MODEL_GLM_FLASH, MODEL_GLM_FLASH_FALLBACK } from '../../shared/ai/client.js';
+import { getZaiClient, getOpenAIClient, MODEL_GLM_5_2, MODEL_GLM_FLASH, MODEL_GPT_NANO } from '../../shared/ai/client.js';
 import { createLogger } from '../../shared/logger.js';
 import { buildManagerPrompt } from './system-prompt.js';
 import { allManagerTools, executeManagerTool } from '../tools/index.js';
@@ -85,14 +85,24 @@ const openaiTools = toOpenAITools(allManagerTools);
 // ---------------------------------------------------------------------------
 
 const FALLBACK_MAP: Record<string, string> = {
-  [MODEL_GLM_FLASH]: MODEL_GLM_FLASH_FALLBACK,
+  [MODEL_GLM_FLASH]: MODEL_GPT_NANO,
 };
+
+/** Z.ai models use the Z.ai client; OpenAI models use the OpenAI client. */
+function clientForModel(model: string): OpenAI {
+  return model.startsWith('gpt-') || model.startsWith('o4-')
+    ? getOpenAIClient()
+    : getZaiClient();
+}
+
+/** Timeout for flash/lookup calls (ms). */
+const FLASH_TIMEOUT_MS = 60_000;
 
 function isRetryableError(err: unknown): boolean {
   const e = err as { status?: number; code?: string; message?: string };
   if (e.status === 429 || e.status === 500 || e.status === 503) return true;
   const msg = e.message ?? '';
-  return /overloaded|network error|temporarily/i.test(msg);
+  return /overloaded|network error|temporarily|timeout|ETIMEDOUT|ECONNABORTED/i.test(msg);
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +117,6 @@ export async function runManagerAgent(
   userPrompt: string,
   options: AgentOptions = {},
 ): Promise<string> {
-  const client = getZaiClient();
 
   // Load memories: semantic search (RAG) with fallback to recent
   let memoryContext: string | undefined;
@@ -150,11 +159,13 @@ export async function runManagerAgent(
   ];
 
   let model = options.model ?? selectModel(userPrompt);
-  const maxRounds = model === MODEL_GLM_FLASH || model === MODEL_GLM_FLASH_FALLBACK
-    ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
+  const isFlash = model === MODEL_GLM_FLASH || model === MODEL_GPT_NANO;
+  const maxRounds = isFlash ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
+  const timeout = isFlash ? FLASH_TIMEOUT_MS : undefined;
   let toolRounds = 0;
 
   while (toolRounds < maxRounds) {
+    let client = clientForModel(model);
     let response: OpenAI.ChatCompletion;
     try {
       response = await client.chat.completions.create({
@@ -162,12 +173,13 @@ export async function runManagerAgent(
         max_tokens: options.maxTokens ?? 8192,
         tools: openaiTools,
         messages,
-      });
+      }, timeout ? { timeout } : undefined);
     } catch (err) {
       const fallback = FALLBACK_MAP[model];
       if (fallback && isRetryableError(err)) {
         log.warn({ model, fallback, err: (err as Error).message }, 'Model unavailable — switching to fallback');
         model = fallback;
+        client = clientForModel(model);
         response = await client.chat.completions.create({
           model,
           max_tokens: options.maxTokens ?? 8192,
