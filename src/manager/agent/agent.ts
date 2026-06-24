@@ -199,7 +199,28 @@ export async function runManagerAgent(
       continue;
     }
 
-    // Final text response
+    // Final text response — GLM reasoning models may put everything into
+    // reasoning_content and leave content empty.  When that happens, retry
+    // with a higher token budget so the model can emit visible output.
+    if (!assistantMessage.content && toolRounds > 0) {
+      log.warn('Empty content after tool rounds — retrying with more tokens');
+      messages.push(assistantMessage);
+      messages.push({
+        role: 'user',
+        content: 'Responde con el análisis completo. Tu respuesta anterior quedó vacía.',
+      });
+      const retry = await client.chat.completions.create({
+        model,
+        max_tokens: 16384,
+        tools: openaiTools,
+        messages,
+      });
+      const retryContent = retry.choices[0].message.content;
+      if (retryContent) {
+        assistantMessage.content = retryContent;
+      }
+    }
+
     let fullText = assistantMessage.content ?? '';
 
     // Safety net: if the response is just a memory confirmation without real content,
