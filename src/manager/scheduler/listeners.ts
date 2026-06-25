@@ -28,23 +28,41 @@ export function registerEventListeners() {
       'Arbitrage opportunity detected — running GLM-5.2 analysis',
     );
 
+    // Calculate concrete arbitrage numbers for the prompt
+    const vesCopFrontera = erpRates.ves_cop;
+    let arbitrageCalc = '';
+    if (p2pMedians.cop.buy && p2pMedians.ves.buy && vesCopFrontera > 0) {
+      const breakeven = p2pMedians.cop.buy / p2pMedians.ves.buy;
+      for (const amount of [500, 1000, 2000]) {
+        const copNeeded = amount * p2pMedians.cop.buy;
+        const directUsdt = copNeeded / p2pMedians.cop.buy;
+        const vesObtained = copNeeded / vesCopFrontera;
+        const indirectUsdt = vesObtained / p2pMedians.ves.buy;
+        const gain = indirectUsdt - directUsdt;
+        arbitrageCalc += `  ${copNeeded.toLocaleString()} COP: directo=${directUsdt.toFixed(1)} USDT, via VES=${indirectUsdt.toFixed(1)} USDT, ganancia=${gain.toFixed(1)} USDT (${((gain/directUsdt)*100).toFixed(1)}%)\n`;
+      }
+      arbitrageCalc = `\nCALCULOS DE ARBITRAJE (ya calculados, NO llames tools):\n` +
+        `  Punto de quiebre VES/COP: ${breakeven.toFixed(2)} (frontera actual: ${vesCopFrontera})\n` + arbitrageCalc;
+    }
+
     const prompt =
+      `IMPORTANTE: Todos los datos ya están abajo. NO llames ninguna herramienta. Responde DIRECTO con el análisis.\n\n` +
       `Se detectó una oportunidad de arbitraje USDT en Binance P2P.\n\n` +
-      `DATOS DEL MERCADO:\n` +
+      `DATOS DEL MERCADO (ya verificados, en tiempo real):\n` +
       `- Tasas ERP: USD/VES = ${erpRates.usd_ves}, VES/COP = ${erpRates.ves_cop}, USD/COP = ${erpRates.usd_cop}\n` +
       `- P2P COP: COMPRA mediana = ${p2pMedians.cop.buy ?? 'N/A'}, VENTA mediana = ${p2pMedians.cop.sell ?? 'N/A'}\n` +
       `- P2P VES: COMPRA mediana = ${p2pMedians.ves.buy ?? 'N/A'}, VENTA mediana = ${p2pMedians.ves.sell ?? 'N/A'}\n` +
       `- Premiums: COP compra ${premiums.cop.buy ?? 'N/A'}%, COP venta ${premiums.cop.sell ?? 'N/A'}%, ` +
-        `VES compra ${premiums.ves.buy ?? 'N/A'}%, VES venta ${premiums.ves.sell ?? 'N/A'}%\n\n` +
+        `VES compra ${premiums.ves.buy ?? 'N/A'}%, VES venta ${premiums.ves.sell ?? 'N/A'}%\n` +
+      `${arbitrageCalc}\n` +
       `TRIAGE AUTOMATICO: ${flashAnalysis.summary}\n` +
       `Dirección sugerida: ${flashAnalysis.direction}, Urgencia: ${flashAnalysis.urgency}\n\n` +
-      `Analiza esta oportunidad para los jefes de Atlas. Incluye:\n` +
-      `1. Qué hacer exactamente (comprar o vender USDT, en qué moneda)\n` +
-      `2. Cuánto capital comprometer (basado en volumen disponible)\n` +
-      `3. Ganancia estimada para $500, $1000 y $2000 USDT\n` +
-      `4. Riesgos: tiempo de ejecución, slippage, volatilidad\n` +
-      `5. Recomendación final: EJECUTAR / MONITOREAR / IGNORAR\n\n` +
-      `Sé breve y directo (máximo 8 líneas). Los jefes necesitan decidir rápido.`;
+      `Redacta un reporte BREVE para los jefes de Atlas (máximo 8 líneas). Incluye:\n` +
+      `1. Qué hacer (comprar/vender USDT, en qué moneda, ruta directa vs indirecta)\n` +
+      `2. Ganancia concreta en USDT para los montos calculados arriba\n` +
+      `3. Hasta qué tasa VES/COP de frontera conviene la ruta indirecta (punto de quiebre)\n` +
+      `4. Recomendación: EJECUTAR / MONITOREAR / IGNORAR\n\n` +
+      `Responde en español. No uses herramientas. Ve al grano.`;
 
     runManagerAgent(prompt, {
       preamble: 'Análisis de oportunidad de arbitraje P2P detectada por el monitor automático.',

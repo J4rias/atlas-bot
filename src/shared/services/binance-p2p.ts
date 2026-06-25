@@ -41,56 +41,72 @@ export interface P2PRateSet {
 
 /**
  * Fetch current USDT rate from Binance P2P for a given fiat currency.
- * Returns median, min, max from the top 15 ads.
+ * Returns median, min, max from the ads, plus full ad details.
  *
  * @param transAmount  Optional USDT amount to filter ads by availability
  * @param tradeType    BUY = people buying USDT (paying fiat), SELL = people selling USDT (receiving fiat). Default: SELL
  * @param fiat         Fiat currency to query. Default: COP
+ * @param limit        Max number of ads to fetch (1-20 single page, >20 paginates). Default: 20
  */
 export async function getUsdtRate(
   transAmount?: number,
   tradeType: 'BUY' | 'SELL' = 'SELL',
   fiat: FiatCurrency = 'COP',
+  limit: number = 20,
 ): Promise<UsdtRateResult> {
-  const payload = {
-    fiat,
-    asset: 'USDT',
-    merchantCheck: false,
-    page: 1,
-    rows: 15,
-    tradeType,
-    transAmount: transAmount ?? null,
-  };
+  const ROWS_PER_PAGE = 20; // Binance max per page
+  const allAds: P2PAd[] = [];
+  let page = 1;
+  let hasMore = true;
 
-  const { data } = await axios.post(BINANCE_P2P_URL, payload, {
-    timeout: REQUEST_TIMEOUT_MS,
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-  });
+  while (hasMore && allAds.length < limit) {
+    const rows = Math.min(ROWS_PER_PAGE, limit - allAds.length);
+    const payload = {
+      fiat,
+      asset: 'USDT',
+      merchantCheck: false,
+      page,
+      rows,
+      tradeType,
+      transAmount: transAmount ?? null,
+    };
 
-  if (data.code !== '000000' || !data.success) {
-    throw new Error(`Binance P2P API error: ${data.message ?? 'unknown'}`);
+    const { data } = await axios.post(BINANCE_P2P_URL, payload, {
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+
+    if (data.code !== '000000' || !data.success) {
+      throw new Error(`Binance P2P API error: ${data.message ?? 'unknown'}`);
+    }
+
+    const items: Record<string, any>[] = data.data ?? [];
+    for (const item of items) {
+      allAds.push({
+        price: Number(item.adv.price),
+        available: Number(item.adv.surplusAmount),
+        merchant: item.advertiser.nickName ?? 'N/A',
+        finishRate: Number(item.advertiser.monthFinishRate ?? 0),
+        positiveRate: Number(item.advertiser.positiveRate ?? 0),
+        paymentMethods: (item.adv.tradeMethods ?? []).map(
+          (m: Record<string, any>) => m.tradeMethodName,
+        ),
+      });
+    }
+
+    hasMore = items.length === ROWS_PER_PAGE;
+    page++;
   }
 
-  const ads: P2PAd[] = (data.data ?? []).map(
-    (item: Record<string, any>) => ({
-      price: Number(item.adv.price),
-      available: Number(item.adv.surplusAmount),
-      merchant: item.advertiser.nickName ?? 'N/A',
-      finishRate: Number(item.advertiser.monthFinishRate ?? 0),
-      positiveRate: Number(item.advertiser.positiveRate ?? 0),
-      paymentMethods: (item.adv.tradeMethods ?? []).map(
-        (m: Record<string, any>) => m.tradeMethodName,
-      ),
-    }),
-  );
-
-  if (ads.length === 0) {
+  if (allAds.length === 0) {
     throw new Error(`Binance P2P returned 0 ads for USDT/${fiat} ${tradeType}`);
   }
+
+  const ads = allAds;
 
   const prices = ads.map((a) => a.price).sort((a, b) => a - b);
   const median = prices[Math.floor(prices.length / 2)];

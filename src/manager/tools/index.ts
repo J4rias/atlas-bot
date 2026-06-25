@@ -296,30 +296,40 @@ const marketDataTools: Anthropic.Tool[] = [
   {
     name: 'get_usdt_rate',
     description:
-      'Get current USDT rate from Binance P2P for a given fiat currency (COP or VES). ' +
-      'Returns median, lowest, highest prices from the top 15 ads, plus spread. ' +
-      'The USDT rate is NOT 1:1 with USD cash — it has its own market. ' +
-      'Use trade_type BUY when someone wants to BUY USDT (pay fiat), SELL when someone wants to SELL USDT (receive fiat). ' +
-      'Default fiat is COP, default trade_type is SELL.',
+      'Get current USDT rate from Binance P2P for COP or VES. ' +
+      'Returns median, lowest, highest prices plus individual ad details (price, available USDT, merchant, payment methods). ' +
+      'USDT has its own market price — NOT 1:1 with USD cash. ' +
+      'trade_type BUY = you pay fiat to get USDT. SELL = you give USDT to receive fiat. ' +
+      'ARBITRAGE LOGIC: To find the best way to convert fiat to USDT, compare routes: ' +
+      '(1) Direct COP→USDT: call with fiat=COP, trade_type=BUY. ' +
+      '(2) Indirect COP→VES(frontera)→USDT: call with fiat=VES, trade_type=BUY, then divide the COP amount by the VES/COP frontier rate to get VES, then divide by P2P VES price. ' +
+      'If route 2 yields more USDT, the difference is the arbitrage gain. The break-even is when P2P_COP_price / P2P_VES_price equals the frontier VES/COP rate. ' +
+      'To sell USDT for fiat, compare SELL prices in COP vs VES — higher price = more fiat per USDT. ' +
+      'Use limit=10 for quick rate checks, limit=20 (default) for analysis with ad details.',
     input_schema: {
       type: 'object' as const,
       properties: {
         amount: {
           type: 'number',
           description:
-            'Transaction amount in USDT to filter ads by availability (optional — larger amounts may get better rates)',
+            'Transaction amount in USDT to filter ads by availability (optional)',
         },
         trade_type: {
           type: 'string',
           enum: ['BUY', 'SELL'],
           description:
-            'BUY = ads from people buying USDT (you pay fiat to get USDT). SELL = ads from people selling USDT (you pay USDT to get fiat). Default: SELL.',
+            'BUY = you pay fiat to get USDT. SELL = you give USDT to receive fiat. Default: SELL.',
         },
         fiat: {
           type: 'string',
           enum: ['COP', 'VES'],
           description:
-            'Fiat currency to query. COP = Colombian pesos, VES = Venezuelan bolívares. Default: COP.',
+            'Fiat currency. COP = pesos colombianos, VES = bolívares. Default: COP.',
+        },
+        limit: {
+          type: 'number',
+          description:
+            'Max ads to fetch. Use 10 for quick checks, 20 for default, higher for deep analysis. Default: 20.',
         },
       },
       required: [],
@@ -778,7 +788,8 @@ export async function executeManagerTool(
       const amount = input.amount as number | undefined;
       const tradeType = (input.trade_type as 'BUY' | 'SELL') ?? 'SELL';
       const fiat = (input.fiat as FiatCurrency) ?? 'COP';
-      const result = await getUsdtRate(amount, tradeType, fiat);
+      const limit = (input.limit as number) ?? 20;
+      const result = await getUsdtRate(amount, tradeType, fiat, limit);
       return JSON.stringify({
         fiat,
         median_per_usdt: result.median,

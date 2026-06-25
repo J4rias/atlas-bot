@@ -11,9 +11,10 @@ const log = createLogger('manager').child({ job: 'rate-monitor' });
 // ---------------------------------------------------------------------------
 // Thresholds — trigger Flash triage when exceeded
 // ---------------------------------------------------------------------------
-const COP_PREMIUM_ABS_THRESHOLD = 3.0;   // % absolute COP premium
+// Normal premiums: COP ~28%, VES ~26%. Only trigger on UNUSUAL levels or significant CHANGES.
+const COP_PREMIUM_ABS_THRESHOLD = 35.0;   // % absolute — well above normal ~28%
 const COP_PREMIUM_DELTA_THRESHOLD = 1.5;  // pp change since last check
-const VES_PREMIUM_ABS_THRESHOLD = 35.0;   // % absolute VES premium (normally ~25-35%)
+const VES_PREMIUM_ABS_THRESHOLD = 40.0;   // % absolute — well above normal ~26%
 const VES_PREMIUM_DELTA_THRESHOLD = 3.0;   // pp change since last check
 
 const MEMORY_SUBJECT = 'arbitrage_snapshot_latest';
@@ -266,7 +267,7 @@ export async function runRateMonitor() {
     try {
       const flashRaw = await runManagerAgent(flashPrompt, {
         preamble: 'Triage automático de arbitraje P2P.',
-        maxTokens: 512,
+        maxTokens: 1024,
         model: MODEL_GLM_FLASH,
       });
       flashAnalysis = parseFlashResponse(flashRaw);
