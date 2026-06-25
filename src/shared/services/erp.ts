@@ -20,6 +20,9 @@ import type {
   CustomerPurchase,
   CustomerActivity,
   DailySalesPoint,
+  Bank,
+  ARSummary,
+  ARCustomersSummary,
 } from '../types/index.js';
 
 // Re-export types so consumers can import from services/erp
@@ -39,6 +42,9 @@ export type {
   CustomerPurchase,
   CustomerActivity,
   DailySalesPoint,
+  Bank,
+  ARSummary,
+  ARCustomersSummary,
 } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
@@ -387,5 +393,48 @@ export async function getCustomerActivity(opts?: {
   if (opts?.min_purchases) params.min_purchases = opts.min_purchases;
 
   const { data: res } = await client.get('/api/customers/activity', { params });
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Banks
+// ---------------------------------------------------------------------------
+
+/** List active banks, optionally filtered by currency. */
+export async function getBanks(currency?: string): Promise<Bank[]> {
+  const params: Record<string, string> = {};
+  if (currency) params.currency = currency;
+
+  const { data: banks } = await client.get('/api/banks', { params });
+  return banks;
+}
+
+// ---------------------------------------------------------------------------
+// Accounts Receivable (AR)
+// ---------------------------------------------------------------------------
+
+/** AR summary: aging distribution, totals, and all pending invoices. */
+export async function getARSummary(opts?: {
+  bucket?: string;
+  search?: string;
+}): Promise<ARSummary> {
+  const params: Record<string, string> = {};
+  if (opts?.bucket) params.bucket = opts.bucket;
+  if (opts?.search) params.search = opts.search;
+
+  const { data: res } = await client.get('/api/ar/summary', { params });
+  return res.data;
+}
+
+/** AR customers: grouped by customer with aging, blocked status, etc. */
+export async function getARCustomers(opts?: {
+  bucket?: string;
+  search?: string;
+}): Promise<ARCustomersSummary> {
+  const params: Record<string, string> = {};
+  if (opts?.bucket) params.bucket = opts.bucket;
+  if (opts?.search) params.search = opts.search;
+
+  const { data: res } = await client.get('/api/ar/customers', { params });
   return res.data;
 }

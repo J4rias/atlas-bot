@@ -3,6 +3,7 @@ import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
 import * as kbRepo from '../../shared/db/repositories/kb.repo.js';
 import * as erp from '../../shared/services/erp.js';
+import { getUsdtRate } from '../../shared/services/binance-p2p.js';
 import { notifyTech } from '../telegram/notifications.js';
 import {
   computeRateSalesCorrelation,
@@ -239,6 +240,38 @@ const businessIntelligenceTools: Anthropic.Tool[] = [
   },
 ];
 
+const accountsReceivableTools: Anthropic.Tool[] = [
+  {
+    name: 'get_accounts_receivable',
+    description:
+      'Get accounts receivable (cuentas por cobrar) from the ERP. Returns aging distribution ' +
+      '(vigente, 0-30, 31-60, 61-90, +90 days overdue), total pending amounts in COP, ' +
+      'and per-customer breakdown with blocked status. Critical for calculating net liquidity ' +
+      '(liquidez neta = assets - liabilities). The pending amount is money owed TO us by customers.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        view: {
+          type: 'string',
+          enum: ['summary', 'customers'],
+          description:
+            'summary = aging + invoice list (default). customers = grouped by customer with blocked/overdue status.',
+        },
+        bucket: {
+          type: 'string',
+          enum: ['vigente', '0_30', '31_60', '61_90', '+90', 'sin_termino'],
+          description: 'Filter by aging bucket (optional)',
+        },
+        search: {
+          type: 'string',
+          description: 'Search by customer name or invoice number (optional)',
+        },
+      },
+      required: [],
+    },
+  },
+];
+
 const closureTools: Anthropic.Tool[] = [
   {
     name: 'get_daily_closure',
@@ -252,6 +285,35 @@ const closureTools: Anthropic.Tool[] = [
         date: {
           type: 'string',
           description: 'Date in YYYY-MM-DD format (default: today)',
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+const marketDataTools: Anthropic.Tool[] = [
+  {
+    name: 'get_usdt_rate',
+    description:
+      'Get current USDT/COP rate from Binance P2P. ' +
+      'Returns median, lowest, highest prices from the top 15 ads, plus spread. ' +
+      'The USDT rate is NOT 1:1 with USD cash — it has its own market. ' +
+      'Use trade_type BUY when someone wants to BUY USDT (pay COP), SELL when someone wants to SELL USDT (receive COP). ' +
+      'Default is SELL.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        amount: {
+          type: 'number',
+          description:
+            'Transaction amount in USDT to filter ads by availability (optional — larger amounts may get better rates)',
+        },
+        trade_type: {
+          type: 'string',
+          enum: ['BUY', 'SELL'],
+          description:
+            'BUY = ads from people buying USDT (you pay COP to get USDT). SELL = ads from people selling USDT (you pay USDT to get COP). Default: SELL.',
         },
       },
       required: [],
@@ -349,7 +411,9 @@ const escalationTools: Anthropic.Tool[] = [
 export const allManagerTools: Anthropic.Tool[] = [
   ...erpToolDefinitions,
   ...businessIntelligenceTools,
+  ...accountsReceivableTools,
   ...closureTools,
+  ...marketDataTools,
   ...crossAnalysisTools,
   ...escalationTools,
   ...knowledgeTools,
@@ -654,12 +718,75 @@ export async function executeManagerTool(
       });
     }
 
+    // ----- Accounts Receivable tools -----
+
+    case 'get_accounts_receivable': {
+      const view = (input.view as string) ?? 'summary';
+      const bucket = input.bucket as string | undefined;
+      const search = input.search as string | undefined;
+
+      if (view === 'customers') {
+        const result = await erp.getARCustomers({ bucket, search });
+        return JSON.stringify({
+          totals: result.totals,
+          customers: result.customers.slice(0, 30).map((c) => ({
+            name: c.customer_name,
+            code: c.customer_code,
+            pending_invoices: c.pending_invoices,
+            adeudado_cop: c.total_adeudado_cop,
+            overdue_cop: c.overdue_cop,
+            worst_bucket: c.worst_bucket,
+            blocked: c.blocked,
+            blocked_reason: c.blocked_reason,
+            last_payment: c.last_payment_date,
+          })),
+        });
+      }
+
+      const result = await erp.getARSummary({ bucket, search });
+      return JSON.stringify({
+        aging: result.aging_distribution,
+        totals: result.totals,
+        top_invoices: result.invoices.slice(0, 20).map((inv) => ({
+          sale_number: inv.sale_number,
+          customer: inv.customer_name,
+          pending_usd: inv.pending_usd,
+          pending_cop: inv.pending_cop,
+          days_overdue: inv.days_overdue,
+          aging: inv.aging_label,
+        })),
+      });
+    }
+
     // ----- Closure tools -----
 
     case 'get_daily_closure': {
       const date = input.date as string | undefined;
       const closure = await erp.getDailyClosure(date);
       return JSON.stringify(closure);
+    }
+
+    // ----- Market data tools -----
+
+    case 'get_usdt_rate': {
+      const amount = input.amount as number | undefined;
+      const tradeType = (input.trade_type as 'BUY' | 'SELL') ?? 'SELL';
+      const result = await getUsdtRate(amount, tradeType);
+      return JSON.stringify({
+        median_cop_per_usdt: result.median,
+        lowest: result.lowest,
+        highest: result.highest,
+        spread: result.spread,
+        ads_count: result.adsCount,
+        trade_type: tradeType,
+        top_5_ads: result.ads.slice(0, 5).map((a) => ({
+          price: a.price,
+          available: a.available,
+          merchant: a.merchant,
+          payment_methods: a.paymentMethods,
+        })),
+        timestamp: result.timestamp,
+      });
     }
 
     // ----- Cross-analysis tools -----

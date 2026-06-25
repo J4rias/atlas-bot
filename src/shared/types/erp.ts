@@ -253,6 +253,84 @@ export interface DailySalesPoint {
   gross_profit: number;
 }
 
+// ---------------------------------------------------------------------------
+// Banks
+// ---------------------------------------------------------------------------
+
+export interface Bank {
+  id: number;
+  name: string;
+  currency: 'USD' | 'COP' | 'VES';
+  type: 'bank' | 'wallet' | 'other';
+  is_active: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Accounts Receivable (AR)
+// ---------------------------------------------------------------------------
+
+export interface ARAgingBucket {
+  bucket: string;
+  label: string;
+  count: number;
+  amount: number;
+  pct: number;
+}
+
+export interface ARInvoice {
+  id: number;
+  sale_number: string;
+  sale_date: string;
+  due_date: string | null;
+  days_overdue: number;
+  aging_bucket: string;
+  aging_label: string;
+  customer_id: number;
+  customer_name: string;
+  customer_code: string | null;
+  vendor_name: string;
+  total_usd: number;
+  paid_usd: number;
+  pending_usd: number;
+  exchange_rate: number;
+  total_cop: number;
+  paid_cop: number;
+  pending_cop: number;
+}
+
+export interface ARSummary {
+  aging_distribution: ARAgingBucket[];
+  totals: {
+    total_invoiced_cop: number;
+    total_pending_cop: number;
+    invoice_count: number;
+  };
+  invoices: ARInvoice[];
+}
+
+export interface ARCustomer {
+  customer_id: number;
+  customer_name: string;
+  customer_code: string | null;
+  pending_invoices: number;
+  total_adeudado_cop: number;
+  overdue_cop: number;
+  worst_bucket: string;
+  aging: Record<string, number>;
+  last_payment_date: string | null;
+  blocked: boolean;
+  blocked_reason: string | null;
+}
+
+export interface ARCustomersSummary {
+  totals: {
+    customer_count: number;
+    blocked_count: number;
+    total_pending_cop: number;
+  };
+  customers: ARCustomer[];
+}
+
 export interface CreatePreOrderInput {
   customer_name?: string;
   customer_phone?: string;

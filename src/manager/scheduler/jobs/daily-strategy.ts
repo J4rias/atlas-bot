@@ -41,17 +41,23 @@ export async function runDailyStrategy(): Promise<void> {
 
 const DAILY_STRATEGY_PROMPT = `Genera el PLAN DE VENTAS del día. Este es el reporte más importante — los jefes lo leen al iniciar la jornada para decidir qué hacer.
 
-PASO 1 — OBJETIVO $1M (obligatorio):
-- Usa get_sales_stats (start_date: 2026-01-01, end_date: fecha de ayer, summary_only: true) para obtener ventas acumuladas del año (totalRevenue)
-- Calcula: faltante para $1,000,000, días hábiles restantes (Lun-Sáb hasta 31 dic 2026), meta del día
+PASO 1 — OBJETIVO $1M LIQUIDEZ NETA (obligatorio):
+- Usa get_sales_stats (start_date: 2026-01-01, end_date: fecha de ayer, summary_only: true) para obtener ganancia bruta acumulada (grossProfit). NOTA: datos de costo disponibles desde 2026-06-17.
+- Usa get_inventory_health para obtener la valuación del inventario (valuation.total_usd).
+- Usa get_accounts_receivable (view: summary) para obtener las cuentas por cobrar reales. El total pendiente (totals.total_pending_cop) es dinero que nos DEBEN — es un activo pero NO es líquido hasta que se cobre.
+- Calcula liquidez neta = inventario a costo + ganancia acumulada - cuentas por cobrar vencidas (solo buckets 0_30 + 31_60 + 61_90 + +90, NO vigente ni sin_termino). Las CxC vigentes son activo sano; las vencidas son riesgo.
+- Calcula: faltante para $1,000,000, días hábiles restantes (Lun-Sáb hasta 31 dic 2026), meta diaria neta.
 - Lee tu memoria (read_memory subject: daily_target) para ver la meta anterior. La meta de hoy NUNCA puede ser menor.
 - Consulta ventas de la última semana (get_sales_summary, últimos 7 días) para comparar el ritmo actual vs la meta. Si el promedio real supera la meta calculada, sube la meta a promedio × 1.05.
+- Detecta la fase actual según promedio de ventas netas de los últimos 7 días: Saneamiento (<$150/día), Tracción (<$600/día), Escala ($600+/día).
 
 PASO 2 — TASAS DEL DIA (obligatorio):
-- Usa get_exchange_rates para obtener las tasas de HOY
+- Usa get_exchange_rates para obtener las tasas ERP de HOY (USD/VES, VES/COP)
+- Usa get_usdt_rate para la tasa USDT/COP actual de Binance P2P
 - Consulta ventas por moneda de ayer o últimos días (get_sales_stats → salesByCurrency)
 - NO alertes que la tasa cambió — eso pasa todos los días. Analiza el IMPACTO: "Si ayer recibimos $X en COP, al convertir hoy vs ayer hay $Y de diferencia."
 - Si el VES se está devaluando rápido, recomienda convertir rápido y cuantifica cuánto se pierde por día de espera.
+- Si hay spread entre tasa USDT de Binance y tasa USD del ERP, reporta la oportunidad de arbitraje.
 
 PASO 3 — ESTRATEGIAS DEL DIA (máximo 3):
 Cada estrategia DEBE ser:
@@ -83,6 +89,7 @@ Reporta UNICAMENTE cosas que IMPIDEN vender:
 - Productos estrella agotados (que tienen demanda real, no cualquier producto)
 - Pre-órdenes pendientes > 24h (dinero esperando)
 - Clientes de alto valor que pasaron su ventana de recompra sin comprar
+- Clientes BLOQUEADOS por CxC vencidas (usa get_accounts_receivable view: customers). Si un cliente de alto valor está bloqueado, es prioridad de cobranza.
 
 NO alertes sobre: cambios de tasa (normal), stock bajo de productos que no se venden, cosas que no requieren acción.
 
@@ -94,10 +101,13 @@ FORMATO DE SALIDA (Telegram Markdown — usa *asteriscos simples* para negrillas
 
 PLAN DE VENTAS — [dia de la semana] [fecha]
 
-OBJETIVO $1M
-- Acumulado 2026: $XXX,XXX (XX% del objetivo)
+LIQUIDEZ NETA → $1M
+- Estimado actual: $XXX,XXX (XX% del objetivo)
+- Inventario: $XXX,XXX | Ganancia acumulada: $XXX,XXX
+- CxC total: $XXX,XXX (XX facturas) | Vencidas: $XXX,XXX
 - Faltan: $XXX,XXX en N días hábiles
-- Meta hoy: $X,XXX
+- Fase: [Saneamiento/Tracción/Escala]
+- Meta hoy: $X,XXX netos
 
 ESTRATEGIAS DEL DIA
 1. [acción concreta con nombres, montos y % de la meta que cubre]
