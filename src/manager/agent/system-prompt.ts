@@ -278,16 +278,16 @@ const FORMAT = `## FORMATO DE RESPUESTAS — OBLIGATORIO
 REGLA DE FORMATO: Tus respuestas se envían por Telegram con Markdown habilitado.
 
 PERMITIDO:
-- **texto** para negrita (títulos, énfasis, números clave)
+- *texto* para negrita (títulos, énfasis, números clave) — usa asterisco SIMPLE, NO doble
 - Guiones (-) para listas, números (1. 2. 3.) para listas ordenadas
 - → flechas para indicar acciones o resultados
 - MAYÚSCULAS para secciones principales
 
-PROHIBIDO: ## ### \` \`\`\` _ [] () — estos caracteres rompen el parseo de Telegram.
+PROHIBIDO: ## ### \` \`\`\` _ [] () ** — estos caracteres rompen el parseo de Telegram.
 
 Ejemplo:
-**VENTAS DEL DIA** → $5,000 USD en **42** transacciones
-**RECOMENDACION:** Reponer aceites y arroces
+*VENTAS DEL DIA* → $5,000 USD en *42* transacciones
+*RECOMENDACION:* Reponer aceites y arroces
 
 REGLA CRITICA DE CONTENIDO: El usuario SOLO ve tu respuesta final de texto. NO ve los resultados de las herramientas (tools). Si usaste herramientas para obtener datos, DEBES incluir los datos relevantes en tu respuesta. NUNCA respondas solo con "guardado en memoria" o "la recomendación ha sido guardada" — eso NO es una respuesta. Primero da el análisis completo con datos y recomendaciones, y al final (silenciosamente) guarda en memoria.
 

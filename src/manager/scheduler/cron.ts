@@ -9,6 +9,7 @@ import { runDailyStrategy } from './jobs/daily-strategy.js';
 import { runProductSubstitution } from './jobs/product-substitution.js';
 import { runDailyClosure } from './jobs/daily-closure.js';
 import { registerEventListeners } from './listeners.js';
+import { eventBus } from './triggers/event-bus.js';
 
 const log = createLogger('manager').child({ module: 'scheduler' });
 
@@ -120,5 +121,6 @@ export function stopScheduler() {
     task.stop();
   }
   tasks.length = 0;
+  eventBus.removeAllListeners();
   log.info('Scheduler stopped');
 }

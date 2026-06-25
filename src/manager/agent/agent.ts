@@ -11,6 +11,10 @@ const log = createLogger('manager').child({ module: 'agent' });
 
 const MAX_TOOL_ROUNDS_MINI = 4;
 const MAX_TOOL_ROUNDS_FULL = 8;
+/** Max characters for memory context injected into the system prompt. */
+const MAX_MEMORY_CHARS = 2000;
+/** Max characters for knowledge base context injected into the system prompt. */
+const MAX_KB_CHARS = 3000;
 
 // ---------------------------------------------------------------------------
 // Model router: GLM-5.2 for complex analysis, GLM-4.7-Flash for simple lookups
@@ -97,6 +101,8 @@ function clientForModel(model: string): OpenAI {
 
 /** Timeout for flash/lookup calls (ms). */
 const FLASH_TIMEOUT_MS = 60_000;
+/** Timeout for full GLM-5.2 calls (ms) — prevents indefinite hangs. */
+const FULL_TIMEOUT_MS = 120_000;
 
 function isRetryableError(err: unknown): boolean {
   const e = err as { status?: number; code?: string; message?: string };
@@ -126,9 +132,13 @@ export async function runManagerAgent(
       memories = await memoryRepo.findMemories(undefined, undefined, 10);
     }
     if (memories.length > 0) {
-      memoryContext = memories
-        .map((m) => `[${m.category}] ${m.subject}: ${m.content}` + (m.outcome ? ` → Resultado: ${m.outcome}` : ''))
-        .join('\n');
+      let ctx = '';
+      for (const m of memories) {
+        const line = `[${m.category}] ${m.subject}: ${m.content}` + (m.outcome ? ` → Resultado: ${m.outcome}` : '') + '\n';
+        if (ctx.length + line.length > MAX_MEMORY_CHARS) break;
+        ctx += line;
+      }
+      if (ctx) memoryContext = ctx;
     }
   } catch {
     log.debug('Memory not available, proceeding without context');
@@ -141,7 +151,13 @@ export async function runManagerAgent(
     if (kbResults && kbResults.length > 0) {
       const relevant = kbResults.filter((r) => r.score > 0.3);
       if (relevant.length > 0) {
-        knowledgeContext = relevant.map((r) => r.content).join('\n\n');
+        let ctx = '';
+        for (const r of relevant) {
+          const block = r.content + '\n\n';
+          if (ctx.length + block.length > MAX_KB_CHARS) break;
+          ctx += block;
+        }
+        if (ctx) knowledgeContext = ctx;
       }
     }
   } catch {
@@ -161,7 +177,7 @@ export async function runManagerAgent(
   let model = options.model ?? selectModel(userPrompt);
   const isFlash = model === MODEL_GLM_FLASH || model === MODEL_GPT_NANO;
   const maxRounds = isFlash ? MAX_TOOL_ROUNDS_MINI : MAX_TOOL_ROUNDS_FULL;
-  const timeout = isFlash ? FLASH_TIMEOUT_MS : undefined;
+  const timeout = isFlash ? FLASH_TIMEOUT_MS : FULL_TIMEOUT_MS;
   let toolRounds = 0;
 
   while (toolRounds < maxRounds) {
@@ -173,7 +189,7 @@ export async function runManagerAgent(
         max_tokens: options.maxTokens ?? 8192,
         tools: openaiTools,
         messages,
-      }, timeout ? { timeout } : undefined);
+      }, { timeout });
     } catch (err) {
       const fallback = FALLBACK_MAP[model];
       if (fallback && isRetryableError(err)) {
@@ -185,7 +201,7 @@ export async function runManagerAgent(
           max_tokens: options.maxTokens ?? 8192,
           tools: openaiTools,
           messages,
-        });
+        }, { timeout });
       } else {
         throw err;
       }
