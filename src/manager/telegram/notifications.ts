@@ -32,9 +32,9 @@ export function toTelegramMarkdown(text: string): string {
   // Convert **bold** → *bold* (GPT/GLM style → Telegram)
   let result = text.replace(/\*\*(.+?)\*\*/g, '*$1*');
   // Remove unpaired asterisks that break Telegram Markdown parsing
-  // Count *-delimited segments: if odd number of *, strip the trailing ones
+  // split('*') gives N+1 parts for N asterisks; odd N means even part count
   const parts = result.split('*');
-  if (parts.length % 2 === 0) {
+  if (parts.length % 2 !== 0) {
     // Odd number of asterisks — remove the last unmatched one
     const lastIdx = result.lastIndexOf('*');
     result = result.slice(0, lastIdx) + result.slice(lastIdx + 1);

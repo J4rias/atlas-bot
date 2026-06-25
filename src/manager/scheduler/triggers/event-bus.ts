@@ -21,7 +21,7 @@ export interface ManagerEvents {
     flashAnalysis: ArbitrageFlashAnalysis;
     timestamp: string;
   };
-  'stock:critical-low': { productId: number; productName: string; currentStock: number; stockDisplay: string; averageSales: number };
+  'stock:critical-low-batch': { productId: number; productName: string; currentStock: number; stockDisplay: string }[];
   'diagnostic:complete': { wasRelevant: boolean; summary: string };
 }
 

@@ -68,13 +68,13 @@ function shouldTrigger(
       triggers.push(`COP SELL delta ${deltas.cop.sell}pp (umbral ${COP_PREMIUM_DELTA_THRESHOLD}pp)`);
   }
   if (premiums.ves.buy != null) {
-    if (premiums.ves.buy >= VES_PREMIUM_ABS_THRESHOLD)
+    if (Math.abs(premiums.ves.buy) >= VES_PREMIUM_ABS_THRESHOLD)
       triggers.push(`VES BUY premium ${premiums.ves.buy}% (umbral ${VES_PREMIUM_ABS_THRESHOLD}%)`);
     if (deltas.ves.buy != null && Math.abs(deltas.ves.buy) >= VES_PREMIUM_DELTA_THRESHOLD)
       triggers.push(`VES BUY delta ${deltas.ves.buy}pp (umbral ${VES_PREMIUM_DELTA_THRESHOLD}pp)`);
   }
   if (premiums.ves.sell != null) {
-    if (premiums.ves.sell >= VES_PREMIUM_ABS_THRESHOLD)
+    if (Math.abs(premiums.ves.sell) >= VES_PREMIUM_ABS_THRESHOLD)
       triggers.push(`VES SELL premium ${premiums.ves.sell}% (umbral ${VES_PREMIUM_ABS_THRESHOLD}%)`);
     if (deltas.ves.sell != null && Math.abs(deltas.ves.sell) >= VES_PREMIUM_DELTA_THRESHOLD)
       triggers.push(`VES SELL delta ${deltas.ves.sell}pp (umbral ${VES_PREMIUM_DELTA_THRESHOLD}pp)`);
