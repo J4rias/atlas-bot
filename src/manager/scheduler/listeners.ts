@@ -1,4 +1,4 @@
-import { eventBus } from './triggers/event-bus.js';
+import { eventBus, type ArbitrageFlashAnalysis } from './triggers/event-bus.js';
 import { notifyBosses, toTelegramMarkdown } from '../telegram/notifications.js';
 import { createLogger } from '../../shared/logger.js';
 import { runManagerAgent } from '../agent/agent.js';
@@ -11,39 +11,62 @@ const log = createLogger('manager').child({ module: 'listeners' });
  * to Telegram notifications.
  */
 export function registerEventListeners() {
-  eventBus.on('rate:significant-change', (data: {
-    currency: string;
-    oldRate: number;
-    newRate: number;
-    deltaPct: number;
+  // --- Arbitrage P2P opportunity (Flash triage said actionable → GLM-5.2 report) ---
+
+  eventBus.on('arbitrage:opportunity', (data: {
+    premiums: { cop: { buy: number | null; sell: number | null }; ves: { buy: number | null; sell: number | null } };
+    deltas: { cop: { buy: number | null; sell: number | null }; ves: { buy: number | null; sell: number | null } };
+    erpRates: { usd_ves: number; ves_cop: number; usd_cop: number };
+    p2pMedians: { cop: { buy: number | null; sell: number | null }; ves: { buy: number | null; sell: number | null } };
+    flashAnalysis: ArbitrageFlashAnalysis;
+    timestamp: string;
   }) => {
-    const direction = data.newRate > data.oldRate ? 'subió' : 'bajó';
-    const alertMessage =
-      `*ALERTA DE TASA*\n\n` +
-      `La tasa *${data.currency}* ${direction} un *${data.deltaPct}%*\n` +
-      `Anterior: ${data.oldRate.toFixed(2)}\n` +
-      `Actual: ${data.newRate.toFixed(2)}`;
+    const { premiums, erpRates, p2pMedians, flashAnalysis } = data;
 
-    log.info({ currency: data.currency, deltaPct: data.deltaPct }, 'Sending rate alert with impact analysis');
+    log.info(
+      { urgency: flashAnalysis.urgency, direction: flashAnalysis.direction },
+      'Arbitrage opportunity detected — running GLM-5.2 analysis',
+    );
 
-    // Fire reactive analysis alongside the alert
-    runManagerAgent(
-      `La tasa ${data.currency} acaba de ${direction === 'subió' ? 'subir' : 'bajar'} un ${data.deltaPct}% ` +
-      `(de ${data.oldRate.toFixed(2)} a ${data.newRate.toFixed(2)}). ` +
-      `Usa analyze_rate_sales_impact para analizar los últimos 7 días y dime: ` +
-      `¿cómo impacta este cambio en las ventas basado en el patrón histórico? ` +
-      `Sé breve (máximo 3-4 líneas). Incluye el coeficiente de correlación y la cuantificación.`,
-      { preamble: 'Análisis reactivo por cambio significativo de tasa.', maxTokens: 1024, model: MODEL_GLM_5_2 },
-    )
+    const prompt =
+      `Se detectó una oportunidad de arbitraje USDT en Binance P2P.\n\n` +
+      `DATOS DEL MERCADO:\n` +
+      `- Tasas ERP: USD/VES = ${erpRates.usd_ves}, VES/COP = ${erpRates.ves_cop}, USD/COP = ${erpRates.usd_cop}\n` +
+      `- P2P COP: COMPRA mediana = ${p2pMedians.cop.buy ?? 'N/A'}, VENTA mediana = ${p2pMedians.cop.sell ?? 'N/A'}\n` +
+      `- P2P VES: COMPRA mediana = ${p2pMedians.ves.buy ?? 'N/A'}, VENTA mediana = ${p2pMedians.ves.sell ?? 'N/A'}\n` +
+      `- Premiums: COP compra ${premiums.cop.buy ?? 'N/A'}%, COP venta ${premiums.cop.sell ?? 'N/A'}%, ` +
+        `VES compra ${premiums.ves.buy ?? 'N/A'}%, VES venta ${premiums.ves.sell ?? 'N/A'}%\n\n` +
+      `TRIAGE AUTOMATICO: ${flashAnalysis.summary}\n` +
+      `Dirección sugerida: ${flashAnalysis.direction}, Urgencia: ${flashAnalysis.urgency}\n\n` +
+      `Analiza esta oportunidad para los jefes de Atlas. Incluye:\n` +
+      `1. Qué hacer exactamente (comprar o vender USDT, en qué moneda)\n` +
+      `2. Cuánto capital comprometer (basado en volumen disponible)\n` +
+      `3. Ganancia estimada para $500, $1000 y $2000 USDT\n` +
+      `4. Riesgos: tiempo de ejecución, slippage, volatilidad\n` +
+      `5. Recomendación final: EJECUTAR / MONITOREAR / IGNORAR\n\n` +
+      `Sé breve y directo (máximo 8 líneas). Los jefes necesitan decidir rápido.`;
+
+    runManagerAgent(prompt, {
+      preamble: 'Análisis de oportunidad de arbitraje P2P detectada por el monitor automático.',
+      maxTokens: 1024,
+      model: MODEL_GLM_5_2,
+    })
       .then((analysis) => {
-        const fullMessage = `${alertMessage}\n\n*Análisis de impacto:*\n${toTelegramMarkdown(analysis)}`;
+        const header =
+          `*OPORTUNIDAD DE ARBITRAJE P2P*\n\n` +
+          `Urgencia: *${flashAnalysis.urgency.toUpperCase()}* | Dirección: *${flashAnalysis.direction}*\n\n`;
+        const fullMessage = `${header}${toTelegramMarkdown(analysis)}`;
         return notifyBosses(fullMessage, 'Markdown');
       })
       .catch((err) => {
-        // If analysis fails, still send the basic alert
-        log.error({ err }, 'Rate impact analysis failed — sending basic alert');
-        notifyBosses(`${alertMessage}\n\nRevise si es necesario ajustar precios o congelar cotizaciones.`, 'Markdown').catch(
-          (e) => log.error({ err: e }, 'Failed to send rate alert'),
+        log.error({ err }, 'GLM-5.2 arbitrage analysis failed — sending Flash summary');
+        const fallback =
+          `*OPORTUNIDAD DE ARBITRAJE P2P*\n\n` +
+          `${flashAnalysis.summary}\n\n` +
+          `Premiums: COP compra ${premiums.cop.buy ?? 'N/A'}%, VES compra ${premiums.ves.buy ?? 'N/A'}%\n` +
+          `Dirección: ${flashAnalysis.direction} | Urgencia: ${flashAnalysis.urgency}`;
+        notifyBosses(fallback, 'Markdown').catch(
+          (e) => log.error({ err: e }, 'Failed to send arbitrage alert'),
         );
       });
   });

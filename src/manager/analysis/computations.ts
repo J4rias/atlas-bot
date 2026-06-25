@@ -57,33 +57,59 @@ export function computeRateSalesCorrelation(
   const sumY2 = pairs.reduce((s, p) => s + p.sales * p.sales, 0);
 
   const numerator = n * sumXY - sumX * sumY;
-  const denominator = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+  const denominatorSq = (n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2);
 
-  const r = denominator === 0 ? 0 : numerator / denominator;
+  // Guard: if denominator² is zero or negative (floating point), correlation is undefined
+  if (denominatorSq <= 0) {
+    return {
+      coefficient: 0,
+      interpretation: 'Sin variación en tasas o ventas durante el período — no se puede calcular correlación.',
+      dataPoints: n,
+      salesChangePerRatePct: null,
+    };
+  }
+
+  const denominator = Math.sqrt(denominatorSq);
+  const r = numerator / denominator;
+
+  // Guard: NaN/Infinity from floating point edge cases
+  if (!Number.isFinite(r)) {
+    return {
+      coefficient: 0,
+      interpretation: 'Error numérico al calcular correlación — datos insuficientes o sin variación.',
+      dataPoints: n,
+      salesChangePerRatePct: null,
+    };
+  }
 
   // Sales change per 1% rate change (simple linear regression slope, normalized)
   const avgRate = sumX / n;
-  const avgSales = sumY / n;
-  const slope = denominator === 0 ? 0 : numerator / (n * sumX2 - sumX ** 2);
+  const slopeDiv = n * sumX2 - sumX ** 2;
+  const slope = slopeDiv === 0 ? 0 : numerator / slopeDiv;
   const salesChangePerRatePct = avgRate !== 0 ? slope * (avgRate * 0.01) : null;
 
   // Interpret
   const absR = Math.abs(r);
   let interpretation: string;
+
+  // Warn about low sample size
+  const lowSample = n < 10;
+  const caveat = lowSample ? ' (pocos datos — interpretar con cautela)' : '';
+
   if (absR < 0.2) {
-    interpretation = 'No hay correlación significativa entre tasa y ventas en este período.';
+    interpretation = `No hay correlación significativa entre tasa y ventas en este período${caveat}.`;
   } else if (absR < 0.5) {
     const dir = r > 0 ? 'positiva' : 'negativa';
-    interpretation = `Correlación ${dir} débil (r=${r.toFixed(2)}). La tasa tiene influencia leve en ventas.`;
+    interpretation = `Correlación ${dir} débil (r=${r.toFixed(2)})${caveat}. La tasa tiene influencia leve en ventas.`;
   } else if (absR < 0.7) {
     const dir = r > 0 ? 'positiva' : 'negativa';
-    interpretation = `Correlación ${dir} moderada (r=${r.toFixed(2)}). La tasa influye en el volumen de ventas.`;
+    interpretation = `Correlación ${dir} moderada (r=${r.toFixed(2)})${caveat}. La tasa influye en el volumen de ventas.`;
   } else {
     const dir = r > 0 ? 'positiva' : 'negativa';
-    interpretation = `Correlación ${dir} fuerte (r=${r.toFixed(2)}). Los movimientos de tasa impactan directamente las ventas.`;
+    interpretation = `Correlación ${dir} fuerte (r=${r.toFixed(2)})${caveat}. Los movimientos de tasa impactan directamente las ventas.`;
   }
 
-  if (salesChangePerRatePct != null && absR >= 0.2) {
+  if (salesChangePerRatePct != null && Number.isFinite(salesChangePerRatePct) && absR >= 0.2) {
     const sign = salesChangePerRatePct >= 0 ? '+' : '';
     interpretation += ` Por cada 1% de cambio en la tasa, las ventas varían ~${sign}$${salesChangePerRatePct.toFixed(0)}/día.`;
   }
@@ -92,7 +118,9 @@ export function computeRateSalesCorrelation(
     coefficient: Math.round(r * 1000) / 1000,
     interpretation,
     dataPoints: n,
-    salesChangePerRatePct: salesChangePerRatePct != null ? Math.round(salesChangePerRatePct * 100) / 100 : null,
+    salesChangePerRatePct: salesChangePerRatePct != null && Number.isFinite(salesChangePerRatePct)
+      ? Math.round(salesChangePerRatePct * 100) / 100
+      : null,
   };
 }
 

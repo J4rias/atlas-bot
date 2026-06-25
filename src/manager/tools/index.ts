@@ -3,7 +3,7 @@ import { erpToolDefinitions, executeErpTool } from '../../shared/ai/tools/index.
 import * as memoryRepo from '../../shared/db/repositories/memory.repo.js';
 import * as kbRepo from '../../shared/db/repositories/kb.repo.js';
 import * as erp from '../../shared/services/erp.js';
-import { getUsdtRate } from '../../shared/services/binance-p2p.js';
+import { getUsdtRate, type FiatCurrency } from '../../shared/services/binance-p2p.js';
 import { notifyTech } from '../telegram/notifications.js';
 import {
   computeRateSalesCorrelation,
@@ -296,11 +296,11 @@ const marketDataTools: Anthropic.Tool[] = [
   {
     name: 'get_usdt_rate',
     description:
-      'Get current USDT/COP rate from Binance P2P. ' +
+      'Get current USDT rate from Binance P2P for a given fiat currency (COP or VES). ' +
       'Returns median, lowest, highest prices from the top 15 ads, plus spread. ' +
       'The USDT rate is NOT 1:1 with USD cash — it has its own market. ' +
-      'Use trade_type BUY when someone wants to BUY USDT (pay COP), SELL when someone wants to SELL USDT (receive COP). ' +
-      'Default is SELL.',
+      'Use trade_type BUY when someone wants to BUY USDT (pay fiat), SELL when someone wants to SELL USDT (receive fiat). ' +
+      'Default fiat is COP, default trade_type is SELL.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -313,7 +313,13 @@ const marketDataTools: Anthropic.Tool[] = [
           type: 'string',
           enum: ['BUY', 'SELL'],
           description:
-            'BUY = ads from people buying USDT (you pay COP to get USDT). SELL = ads from people selling USDT (you pay USDT to get COP). Default: SELL.',
+            'BUY = ads from people buying USDT (you pay fiat to get USDT). SELL = ads from people selling USDT (you pay USDT to get fiat). Default: SELL.',
+        },
+        fiat: {
+          type: 'string',
+          enum: ['COP', 'VES'],
+          description:
+            'Fiat currency to query. COP = Colombian pesos, VES = Venezuelan bolívares. Default: COP.',
         },
       },
       required: [],
@@ -771,9 +777,11 @@ export async function executeManagerTool(
     case 'get_usdt_rate': {
       const amount = input.amount as number | undefined;
       const tradeType = (input.trade_type as 'BUY' | 'SELL') ?? 'SELL';
-      const result = await getUsdtRate(amount, tradeType);
+      const fiat = (input.fiat as FiatCurrency) ?? 'COP';
+      const result = await getUsdtRate(amount, tradeType, fiat);
       return JSON.stringify({
-        median_cop_per_usdt: result.median,
+        fiat,
+        median_per_usdt: result.median,
         lowest: result.lowest,
         highest: result.highest,
         spread: result.spread,

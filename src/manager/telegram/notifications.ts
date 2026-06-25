@@ -29,7 +29,17 @@ function splitMessage(text: string): string[] {
  * GPT models default to **double asterisks**; Telegram expects *single*.
  */
 export function toTelegramMarkdown(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+  // Convert **bold** → *bold* (GPT/GLM style → Telegram)
+  let result = text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+  // Remove unpaired asterisks that break Telegram Markdown parsing
+  // Count *-delimited segments: if odd number of *, strip the trailing ones
+  const parts = result.split('*');
+  if (parts.length % 2 === 0) {
+    // Odd number of asterisks — remove the last unmatched one
+    const lastIdx = result.lastIndexOf('*');
+    result = result.slice(0, lastIdx) + result.slice(lastIdx + 1);
+  }
+  return result;
 }
 
 /** Send a message to all boss recipients (group or individual). */
@@ -56,9 +66,11 @@ export async function notifyBosses(text: string, parseMode?: 'Markdown' | 'HTML'
         const msg = err instanceof Error ? err.message : String(err);
         // If Markdown fails, retry without parse mode
         if (parseMode && msg.includes("can't parse")) {
+          log.warn({ chatId: r.chatId, name: r.name }, 'Markdown parse failed — retrying as plain text');
           try {
             await bot.api.sendMessage(r.chatId, chunk);
-          } catch { /* already logged */ }
+            continue; // retry succeeded, don't log error
+          } catch { /* fall through to error log */ }
         }
         log.error({ chatId: r.chatId, name: r.name, err: msg }, 'Failed to notify boss');
       }
