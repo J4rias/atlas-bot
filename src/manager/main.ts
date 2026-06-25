@@ -8,6 +8,7 @@ import { teachCommand } from './telegram/commands/teach.js';
 import { registerCallbackHandlers } from './agent/escalation.js';
 import { loadRegistry } from './agent/action-registry.js';
 import { startScheduler, stopScheduler } from './scheduler/cron.js';
+import { closePool } from '../shared/db/client.js';
 
 const log = createLogger('manager');
 
@@ -26,6 +27,7 @@ async function shutdown(signal: string) {
 
   stopScheduler();
   await stopBot();
+  await closePool();
 
   log.info('Manager stopped.');
   process.exit(0);

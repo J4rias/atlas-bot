@@ -19,16 +19,19 @@ export function setMessageHandler(handler: MessageHandler) {
 // Signature verification
 // ---------------------------------------------------------------------------
 
-function verifySignature(req: Request): boolean {
+function verifySignature(req: Request & { rawBody?: Buffer }): boolean {
   const secret = config.meta.appSecret;
   if (!secret) return true; // skip in dev if not configured
 
   const signature = req.headers['x-hub-signature-256'] as string | undefined;
   if (!signature) return false;
 
+  const rawBody = req.rawBody;
+  if (!rawBody) return false;
+
   const expected =
     'sha256=' +
-    crypto.createHmac('sha256', secret).update(req.body).digest('hex');
+    crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
   return crypto.timingSafeEqual(
     Buffer.from(signature),
@@ -41,21 +44,6 @@ function verifySignature(req: Request): boolean {
 // ---------------------------------------------------------------------------
 
 export const messengerRouter = Router();
-
-// Raw body needed for signature verification
-messengerRouter.use((req, _res, next) => {
-  // Store raw body before JSON parsing
-  if (req.headers['content-type']?.includes('application/json')) {
-    let rawBody = '';
-    req.on('data', (chunk: Buffer) => {
-      rawBody += chunk.toString();
-    });
-    req.on('end', () => {
-      (req as Request & { rawBody?: string }).rawBody = rawBody;
-    });
-  }
-  next();
-});
 
 // GET — Webhook verification (Meta sends this to validate)
 messengerRouter.get('/', (req: Request, res: Response) => {
@@ -74,6 +62,12 @@ messengerRouter.get('/', (req: Request, res: Response) => {
 
 // POST — Incoming messages
 messengerRouter.post('/', (req: Request, res: Response) => {
+  if (!verifySignature(req as Request & { rawBody?: Buffer })) {
+    log.warn('Invalid webhook signature — rejecting');
+    res.sendStatus(403);
+    return;
+  }
+
   // Always respond 200 quickly to avoid Meta retries
   res.sendStatus(200);
 

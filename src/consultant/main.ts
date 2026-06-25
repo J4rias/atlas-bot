@@ -8,6 +8,7 @@ import { messengerRouter, setMessageHandler } from './channels/messenger/webhook
 import * as messenger from './channels/messenger/sender.js';
 import { getConversation, addUserMessage, activeCount } from './conversation/manager.js';
 import { getAgentResponse } from './conversation/agent.js';
+import { closePool } from '../shared/db/client.js';
 
 const log = createLogger('consultant');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,7 +55,11 @@ const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, '..', '..', 'public')));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+  },
+}));
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -75,8 +80,22 @@ app.get('/', (_req, res) => {
   res.redirect('/catalogo');
 });
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   log.info({ port: config.port }, 'Atlas Consultant running');
   log.info(`  Catalog: http://localhost:${config.port}/catalogo`);
   log.info(`  Webhook: http://localhost:${config.port}/webhook`);
 });
+
+// Graceful shutdown
+let isShuttingDown = false;
+async function shutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  log.info({ signal }, 'Shutting down consultant...');
+  server.close();
+  await closePool();
+  log.info('Consultant stopped.');
+  process.exit(0);
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
